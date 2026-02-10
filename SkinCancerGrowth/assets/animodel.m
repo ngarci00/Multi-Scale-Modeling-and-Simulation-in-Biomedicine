@@ -31,7 +31,6 @@ for t = 1:numsteps %every iteration is equal to one simulation step
     old_state = state; %updates are based on the old_state
     new_state = old_state;
 
-
     for i = 1:nelem
         nbr = esuel(i,:);
         local = [i,nbr];
