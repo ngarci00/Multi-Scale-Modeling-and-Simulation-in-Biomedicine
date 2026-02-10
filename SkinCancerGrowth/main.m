@@ -20,7 +20,7 @@ end
 %Picking a single element and setting it to cancer
 ic = randi(nelem); % randi can return a random scalar int between 1 & imax (largest int in sample interval
 state(ic) = 1; % 1 = cancer cell
-%%Parameters/ Probabilities
+%% Parameters/ Probabilities
 %To see more/less agressive growth & diff:
 p1 = 0.15; %Cancer
 p2 = 0.25; %Complex
