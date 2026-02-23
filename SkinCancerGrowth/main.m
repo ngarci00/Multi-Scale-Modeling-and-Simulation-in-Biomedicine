@@ -22,16 +22,16 @@ ic = randi(nelem); % randi can return a random scalar int between 1 & imax (larg
 state(ic) = 1; % 1 = cancer cell
 %% Parameters/ Probabilities
 %To see more/less agressive growth & diff:
-p1 = 0.15; %Cancer
+p1 = 0.50; %Cancer
 p2 = 0.25; %Complex
 p3 = 0.01; %Necrotic
 
 pimmune = 0.003; %Probability of immune response
-pchemo = 0.005; %Probability of chemo response
+pchemo = 0.50; %Probability of chemo response
 
 %% Chemo & or Immune response:
 immune = false;
-chemo = false;
+chemo = true;
 %Time step parameter
 numsteps = 1000; %Time Step (days/months/years)
 
