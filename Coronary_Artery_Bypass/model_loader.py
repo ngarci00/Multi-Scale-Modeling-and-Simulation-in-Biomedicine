@@ -46,9 +46,6 @@ def read_rows(path: Path) -> list[list[str]]:
             if any(cell.strip() == "" for cell in row):
                 raise ValueError(f"{path.name}: blank value at line {row_number}")
             rows.append([cell.strip() for cell in row])
-
-    if not rows:
-        raise ValueError(f"{path.name}: file is empty")
     return rows
 
 #Loading the data from the csv file, and converting into appropriate data structures!
@@ -191,6 +188,6 @@ def load_arterial_network(data_path: str | os.PathLike | None = None) -> Arteria
 if __name__ == "__main__":
     network = load_arterial_network()
     print(
-        f"Loaded arterial network from {network.data_path} "
-        f"with {network.n_points} points and {network.n_branches} branches."
+        f"\nLoaded arterial network from {network.data_path} "
+        f"with {network.n_points} points and {network.n_branches} branches.\n"
     )
