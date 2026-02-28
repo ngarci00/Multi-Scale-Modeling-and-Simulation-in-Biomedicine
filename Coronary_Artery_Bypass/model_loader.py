@@ -13,7 +13,6 @@ from typing import Iterable
 #for example, a function that expects int input can be annotated with def func(x:int) -> None: 
 #to indicate that x should be an integer and the functions returns nothing!
 
-
 @dataclass
 class ArterialNetwork:
     points: list[tuple[float, float, float]] #coronary.ptxyz.csv
@@ -80,7 +79,8 @@ def load_vector(path: Path) -> list[int]:
         values.append(value)
     return values
 
-
+#Loading the data from the csv file, and converting into appropriate data structures (:
+#expects a matrix of integers, and checks # of col and data types
 def load_matrix_int(path: Path, expected_cols: int) -> list[tuple[int, ...]]:
     rows = read_rows(path)
     matrix: list[tuple[int, ...]] = []
@@ -108,7 +108,7 @@ def _to_zero_based(
         normalized.append(value - 1)
     return normalized
 
-#
+#Main function to load the arterial network data from the csv files and represent it as a structured data class
 def load_arterial_network(data_path: str | os.PathLike | None = None) -> ArterialNetwork:
     resolved_data_dir = data_dir(data_path)
     #file paths and names 
@@ -144,7 +144,7 @@ def load_arterial_network(data_path: str | os.PathLike | None = None) -> Arteria
         )
 
     branches: list[tuple[int, int]] = [] #branch connectivity: pairs of point indices that define each branch
-    for row_number, (start, end) in enumerate(raw_branches, start=1):
+    for row_number, (start, end) in enumerate(raw_branches, start=1): #iterating through the rows of the branch connectivity 
         zero_based_pair = _to_zero_based(
             [start, end],
             name=f"{branches_path.name}: branch endpoints at row {row_number}",
@@ -172,7 +172,7 @@ def load_arterial_network(data_path: str | os.PathLike | None = None) -> Arteria
         graft_options.append((zero_based_pair[0], zero_based_pair[1], radius))
 
     points = [(x, y, z) for x, y, z in raw_points]
-    branch_tree = list(raw_tree)
+    branch_tree = list(raw_tree) #branch hierarchy: list of integers where each value indicates the parent branch index (or -1 for root branches)
 
     return ArterialNetwork(
         points=points,
