@@ -1,8 +1,13 @@
-#Script reads labels and creates a VTK file for visualizaiton in Paraview
-import numpy as np
+#Script reads labels and creates a VTK file for visualization in Paraview.
+import os
 
 def dumpVTK(filename, npoin, nelem, xyz, ele, clr):
-    with open(filename,'w') as fp:
+    filepath = os.path.abspath(os.path.expanduser(os.fspath(filename)))#Ensuring an abs path for the file
+    directory = os.path.dirname(filepath)
+    if directory:
+        os.makedirs(directory, exist_ok=True)#Makes the directory if it doesn't exist, but does nothing if it does exist
+
+    with open(filepath, 'w') as fp:
         fp.write('# vtk DataFile Version 2.0\n')
         fp.write('vtk output\n')
         fp.write('ASCII\nDATASET UNSTRUCTURED_GRID\n')
@@ -17,5 +22,5 @@ def dumpVTK(filename, npoin, nelem, xyz, ele, clr):
             fp.write('5\n') # VTK_TRIANGLE
         fp.write('CELL_DATA %d\nSCALARS cell-type float\nLOOKUP_TABLE default\n' % nelem)
         for c in clr:
-            fp.write('%d\n' % clr)
+            fp.write('%d\n' % c)
     return 0
