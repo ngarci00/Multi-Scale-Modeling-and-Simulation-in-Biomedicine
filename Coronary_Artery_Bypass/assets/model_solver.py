@@ -13,9 +13,10 @@ from .model_loader import ArterialNetwork, load_arterial_network
 @dataclass
 class SolverConfig:
     viscosity: float = 0.04 #mmHg*s
-    inlet_pressure: float = 100.0 #mmHg
-    outlet_pressure: float = 10.0 #mmHg
-    occlusion_radius_fraction: float = 0.01 #fraction of original radius for occluded branches
+    inlet_pressure: float = 100.0 #mmHg Mean Aortic Pressure
+    outlet_pressure: float = 10.0 #mmHg Venous Pressure
+    outlet_resistance: float | None = None #mmHg*s/cm^3 lumped outflow resistance at each outlet
+    occlusion_radius_fraction: float = 0.01 #fraction of original radius for occluded branches (%Stensosis)
     graft_index: int | None = None #index of the graft option to use
 
 
@@ -30,6 +31,8 @@ class FlowSolution:
     branch_occluded: list[int] #binary flag indicating whether each branch is occluded (1) or not (0)
     branch_is_graft: list[int] #binary flag indicating whether each branch is a graft (1) or not (0)
     vtk_cells: list[tuple[int, int]] #list of branch connectivity (start node index, end node index) for all branches including graft if used
+    outlet_boundary_flows: list[float] #net outflow at each outlet node
+    tree_outlet_flows: dict[int, float] #total outlet flow aggregated by arterial tree id
     graft_used: tuple[int, int, float] | None #the graft option used (start point, end point, radius) or None if no graft was used
     config: SolverConfig #the configuration used to solve the network
 
@@ -52,6 +55,15 @@ def poiseuille_resistance(length: float, radius: float, viscosity: float) -> flo
     if length <= 0.0:
         raise ValueError(f"Branch length must be positive. Received {length}.")
     return (8.0 * viscosity * length) / (math.pi * radius**4)
+
+
+def validate_config(config: SolverConfig) -> None:
+    if config.viscosity <= 0.0:
+        raise ValueError("Viscosity must be positive.")
+    if config.occlusion_radius_fraction <= 0.0 or config.occlusion_radius_fraction > 1.0:
+        raise ValueError("occlusion_radius_fraction must be in the interval (0, 1].")
+    if config.outlet_resistance is not None and config.outlet_resistance <= 0.0:
+        raise ValueError("outlet_resistance must be positive when provided.")
 
 #Buidling the effective network by applying occlusion and grafting mods (if any) to the original network
 #as well as computing the lengths, effective radii, and resistances of all branches in the modified network
@@ -104,8 +116,9 @@ def known_pressures(network: ArterialNetwork, config: SolverConfig) -> dict[int,
     known: dict[int, float] = {}
     for node in network.inlet_points: #setting known presssure at the inlet
         known[node] = config.inlet_pressure
-    for node in network.outlet_points: #setting known pressure at the outlet
-        known[node] = config.outlet_pressure
+    if config.outlet_resistance is None:
+        for node in network.outlet_points: #setting known pressure at the outlet
+            known[node] = config.outlet_pressure
     return known
 
 def solve_pressures(
@@ -121,6 +134,12 @@ def solve_pressures(
     for branch_index, ((start, end), resistance) in enumerate(zip(vtk_cells, resistances)):
         adjacency[start].append((branch_index, resistance))
         adjacency[end].append((branch_index, resistance))
+
+    if not unknown_nodes:
+        pressures = [0.0] * network.n_points
+        for node, pressure in known.items():
+            pressures[node] = pressure
+        return pressures
 
     node_to_row = {node: row for row, node in enumerate(unknown_nodes)}
     matrix = np.zeros((len(unknown_nodes), len(unknown_nodes)), dtype=float)
@@ -139,6 +158,11 @@ def solve_pressures(
             else:
                 rhs[row] += conductance * known[neighbor]
 
+        if config.outlet_resistance is not None and node in network.outlet_points:
+            outlet_conductance = 1.0 / config.outlet_resistance
+            matrix[row, row] += outlet_conductance
+            rhs[row] += outlet_conductance * config.outlet_pressure
+
  
     solved = np.linalg.solve(matrix, rhs) #solving the linear system to find the pressures at the unknown nodes
    
@@ -148,6 +172,62 @@ def solve_pressures(
     for node, row in node_to_row.items():
         pressures[node] = float(solved[row])
     return pressures
+
+
+def outlet_boundary_flows(
+    network: ArterialNetwork,
+    solution: FlowSolution | None,
+    *,
+    pressures: list[float] | None = None,
+    branch_flows: list[float] | None = None,
+    vtk_cells: list[tuple[int, int]] | None = None,
+    config: SolverConfig | None = None,
+) -> list[float]:
+    if solution is not None:
+        pressures = solution.pressures
+        branch_flows = solution.branch_flows
+        vtk_cells = solution.vtk_cells
+        config = solution.config
+    if pressures is None or branch_flows is None or vtk_cells is None or config is None:
+        raise ValueError("Provide either a FlowSolution or explicit pressures, branch_flows, vtk_cells, and config.")
+
+    outlet_to_index = {node: index for index, node in enumerate(network.outlet_points)}
+    flows = [0.0] * len(network.outlet_points)
+
+    if config.outlet_resistance is None:
+        for (start, end), flow in zip(vtk_cells, branch_flows):
+            if end in outlet_to_index:
+                flows[outlet_to_index[end]] += flow
+            elif start in outlet_to_index:
+                flows[outlet_to_index[start]] -= flow
+        return flows
+
+    for outlet_index, node in enumerate(network.outlet_points):
+        flows[outlet_index] = (pressures[node] - config.outlet_pressure) / config.outlet_resistance
+    return flows
+
+
+def tree_outlet_flows(
+    network: ArterialNetwork,
+    branch_flows: list[float],
+    vtk_cells: list[tuple[int, int]],
+) -> dict[int, float]:
+    outlet_set = set(network.outlet_points)
+    totals: dict[int, float] = {}
+
+    for branch_index, ((start, end), flow) in enumerate(zip(vtk_cells, branch_flows)):
+        if branch_index >= len(network.branch_tree):
+            continue
+        if end in outlet_set:
+            contribution = flow
+        elif start in outlet_set:
+            contribution = -flow
+        else:
+            continue
+        tree_id = network.branch_tree[branch_index]
+        totals[tree_id] = totals.get(tree_id, 0.0) + contribution
+
+    return totals
 
 #Main function to solve the flow in the coronary artery network given an arterial network and solver config
 #returns a FlowSolution containing the pressures, flows, and properties of all branches
@@ -159,6 +239,7 @@ def solve_network(
         network = load_arterial_network()
     if config is None:
         config = SolverConfig()
+    validate_config(config)
 
     (
         vtk_cells,
@@ -180,6 +261,16 @@ def solve_network(
         branch_pressure_drops.append(pressure_drop)
         branch_flows.append(pressure_drop / resistance)
 
+    outlet_flows = outlet_boundary_flows(
+        network,
+        None,
+        pressures=pressures,
+        branch_flows=branch_flows,
+        vtk_cells=vtk_cells,
+        config=config,
+    )
+    per_tree_outlet_flows = tree_outlet_flows(network, branch_flows, vtk_cells)
+
     return FlowSolution(
         pressures=pressures,
         branch_lengths=branch_lengths,
@@ -190,6 +281,8 @@ def solve_network(
         branch_occluded=branch_occluded,
         branch_is_graft=branch_is_graft,
         vtk_cells=vtk_cells,
+        outlet_boundary_flows=outlet_flows,
+        tree_outlet_flows=per_tree_outlet_flows,
         graft_used=graft_used,
         config=config,
     )
@@ -216,6 +309,27 @@ def save_solution_vtk(
         handle.write("LOOKUP_TABLE default\n")
         for pressure in solution.pressures:
             handle.write(f"{pressure:.12e}\n")
+        write_point_scalar(handle, "point_id", [node + 1 for node in range(network.n_points)], integer=True)
+        write_point_scalar(
+            handle,
+            "is_inlet",
+            [1 if node in set(network.inlet_points) else 0 for node in range(network.n_points)],
+            integer=True,
+        )
+        write_point_scalar(
+            handle,
+            "is_outlet",
+            [1 if node in set(network.outlet_points) else 0 for node in range(network.n_points)],
+            integer=True,
+        )
+        outlet_flow_by_node = {node: 0.0 for node in range(network.n_points)}
+        for outlet_node, outlet_flow in zip(network.outlet_points, solution.outlet_boundary_flows):
+            outlet_flow_by_node[outlet_node] = outlet_flow
+        write_point_scalar(
+            handle,
+            "outlet_boundary_flow",
+            [outlet_flow_by_node[node] for node in range(network.n_points)],
+        )
 
     return filepath
 #Helper function to write a scalar array to the VTK file for either cell data or point data!
@@ -228,6 +342,10 @@ def write_cell_scalar(handle, name: str, values: list[float] | list[int], intege
             handle.write(f"{int(value)}\n")
         else:
             handle.write(f"{float(value):.12e}\n")
+
+
+def write_point_scalar(handle, name: str, values: list[float] | list[int], integer: bool = False) -> None:
+    write_cell_scalar(handle, name, values, integer=integer)
 
 #Main function to run the entire case: load the network, solve for the flow, save the vtk solution
 def run_case(
