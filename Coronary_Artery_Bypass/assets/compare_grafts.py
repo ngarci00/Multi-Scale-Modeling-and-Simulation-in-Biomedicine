@@ -2,8 +2,14 @@
 #the total outlet flow for each of these cases.
 from __future__ import annotations
 from dataclasses import dataclass
-from model_loader import load_arterial_network
-from model_solver import SolverConfig, solve_network
+from pathlib import Path
+
+try:
+    from .model_loader import load_arterial_network
+    from .model_solver import SolverConfig, save_solution_vtk, solve_network
+except ImportError:  # pragma: no cover - supports running this file directly
+    from model_loader import load_arterial_network
+    from model_solver import SolverConfig, save_solution_vtk, solve_network
 
 
 @dataclass
@@ -12,6 +18,7 @@ class GraftComparison:
     graft: tuple[int, int, float]
     total_outlet_flow: float
     restored_outlet_flow: float
+    vtk_path: Path
 
 #Helper function to calculate the total outlet flow from the solution.
 def total_outlet_flow(network, solution) -> float:
@@ -29,6 +36,8 @@ def compare_graft_options() -> tuple[float, list[GraftComparison]]:
     network = load_arterial_network()
     baseline_solution = solve_network(network=network, config=SolverConfig())
     baseline_flow = total_outlet_flow(network, baseline_solution)
+    output_dir = Path(__file__).resolve().parent.parent / "results"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     comparisons: list[GraftComparison] = []
     for graft_index, graft in enumerate(network.graft_options):
@@ -37,12 +46,15 @@ def compare_graft_options() -> tuple[float, list[GraftComparison]]:
             config=SolverConfig(graft_index=graft_index),
         )
         total_flow = total_outlet_flow(network, solution)
+        vtk_path = output_dir / f"graft_option_{graft_index}.vtk"
+        save_solution_vtk(network, solution, vtk_path)
         comparisons.append(
             GraftComparison(
                 graft_index=graft_index,
                 graft=graft,
                 total_outlet_flow=total_flow,
                 restored_outlet_flow=total_flow - baseline_flow,
+                vtk_path=vtk_path,
             )
         )
 
@@ -65,7 +77,8 @@ def main() -> None:
             f"{rank}. Graft_index={comparison.graft_index} "
             f"nodes=({display_start} to {display_end}) radius={radius:.3f} "
             f"Total_outlet_flow={comparison.total_outlet_flow:.3e} "
-            f"Restored_outlet_flow={comparison.restored_outlet_flow:.3e}"
+            f"Restored_outlet_flow={comparison.restored_outlet_flow:.3e} "
+            f"VTK={comparison.vtk_path}"
         )
 
 if __name__ == "__main__":

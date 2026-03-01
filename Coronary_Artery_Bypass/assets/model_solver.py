@@ -5,8 +5,9 @@ from __future__ import annotations
 import math, numpy as np, os
 from dataclasses import dataclass
 from pathlib import Path
-from assets.dumpVTK import dumpVTK
-from model_loader import ArterialNetwork, load_arterial_network
+
+from .dumpVTK import dumpVTK
+from .model_loader import ArterialNetwork, load_arterial_network
 
 #Parameter class to hold the desired config for the solver
 @dataclass

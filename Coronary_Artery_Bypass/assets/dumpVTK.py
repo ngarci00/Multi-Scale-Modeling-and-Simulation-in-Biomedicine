@@ -1,19 +1,6 @@
 #Script reads labels and creates a VTK file for visualization in Paraview.
 import os
-
-
-def dumpVTK(
-    filename,
-    npoin,
-    nelem,
-    xyz,
-    ele,
-    clr,
-    *,
-    vtk_cell_type=None,
-    zero_based=True,
-    scalar_name='cell-type',
-):
+def dumpVTK(filename, npoin, nelem, xyz, ele, clr, *, vtk_cell_type=None, zero_based=True, scalar_name='cell-type'):
     filepath = os.path.abspath(os.path.expanduser(os.fspath(filename)))#Ensuring an abs path for the file
     directory = os.path.dirname(filepath)
     if directory:
@@ -31,9 +18,9 @@ def dumpVTK(
 
     if vtk_cell_type is None:
         if cell_size == 2:
-            vtk_cell_type = 3 # VTK_LINE
+            vtk_cell_type = 3 #VTK_LINE
         elif cell_size == 3:
-            vtk_cell_type = 5 # VTK_TRIANGLE
+            vtk_cell_type = 5 #VTK_TRIANGLE
         else:
             raise ValueError(f'Unsupported cell size: {cell_size}.')
 

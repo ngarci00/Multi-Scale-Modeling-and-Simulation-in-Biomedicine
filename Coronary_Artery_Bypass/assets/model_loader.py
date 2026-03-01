@@ -30,7 +30,7 @@ class ArterialNetwork:
 #Loading the data from the csv file, and converting into appropriate data structures. 
 def data_dir(data_path: str | os.PathLike | None = None) -> Path:
     if data_path is None:
-        return (Path(__file__).resolve().parent / "data").resolve()
+        return (Path(__file__).resolve().parent.parent / "data").resolve()
     return Path(os.fspath(data_path)).expanduser().resolve()
 
 #Reading the rows from the csv file & stripping whitespaces.
@@ -188,6 +188,5 @@ def load_arterial_network(data_path: str | os.PathLike | None = None) -> Arteria
 if __name__ == "__main__":
     network = load_arterial_network()
     print(
-        f"\nLoaded arterial network from {network.data_path} "
-        f"with {network.n_points} points and {network.n_branches} branches.\n"
+        f"\nLoaded arterial network from {network.data_path} with {network.n_points} points and {network.n_branches} branches.\n"
     )
