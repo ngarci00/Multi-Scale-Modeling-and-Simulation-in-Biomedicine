@@ -1,8 +1,6 @@
 #Script to load the arterial network data from CSV files and represent it as a structured data class:
-from __future__ import annotations #this helps with type annotations for forward references, meaning:
-#we can use file names and types that are defined later in the code without freaking out the interpreter.
-#kinda like saying "Hey, I know this thing is gonna be defined later, just trust me on this one."
-import csv, os
+import csv
+import os
 from dataclasses import dataclass
 #dataclasses is a lib that allows us to create classes that are used to store data without having to write,
 #a bounch of code to init the class, so basically automates __init__ and other mdethods.
@@ -35,8 +33,7 @@ def data_dir(data_path: str | os.PathLike | None = None) -> Path:
 
 #Reading the rows from the csv file & stripping whitespaces.
 def read_rows(path: Path) -> list[list[str]]:
-   
-    rows: list[list[str]] = []
+    rows: list[list[str]] = [] #list of rows, where each row is a list of strings
     
     with path.open(newline="") as handle:
         reader = csv.reader(handle)

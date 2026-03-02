@@ -1,15 +1,10 @@
 #Script that helps compare the different graft options by running the solver for each option and calculating
 #the total outlet flow for each of these cases.
-from __future__ import annotations
 from dataclasses import dataclass
+#dataclasses is a convienient library for defining simple classes that are primarily used to store data.
 from pathlib import Path
-
-try:
-    from .model_loader import load_arterial_network
-    from .model_solver import SolverConfig, save_solution_vtk, solve_network
-except ImportError:  # pragma: no cover - supports running this file directly
-    from model_loader import load_arterial_network
-    from model_solver import SolverConfig, save_solution_vtk, solve_network
+from assets.model_loader import load_arterial_network
+from assets.model_solver import SolverConfig, save_solution_vtk, solve_network
 
 
 @dataclass
@@ -26,9 +21,9 @@ def total_outlet_flow(network, solution) -> float:
     outlet_set = set(network.outlet_points)
     for (start, end), flow in zip(solution.vtk_cells, solution.branch_flows):
         if end in outlet_set:
-            total_flow += flow
+            total_flow += flow #if total flow is positive, flow is going out of the otulet, if negative flow is going into the outlet.
         elif start in outlet_set:
-            total_flow -= flow
+            total_flow -= flow 
     return total_flow
 
 #Function to compare all grafts options by the total outlet flow they restore compared to the baseline.
@@ -57,8 +52,8 @@ def compare_graft_options() -> tuple[float, list[GraftComparison]]:
                 vtk_path=vtk_path,
             )
         )
-
-    comparisons.sort(key=lambda item: item.restored_outlet_flow, reverse=True)
+#Sort the comparisons by the restored outlet flow in descending order (best graft first)
+    comparisons.sort(key=lambda item: item.restored_outlet_flow, reverse=True) #reverse=True sorts in descending order
     return baseline_flow, comparisons
 
 #Main entry point for comparison script, it also runs the comparison and prints out the results:
@@ -75,11 +70,8 @@ def main() -> None:
         display_end = end + 1
         print(
             f"{rank}. Graft_index={comparison.graft_index} "
-            f"nodes=({display_start} to {display_end}) radius={radius:.3f} "
-            f"Total_outlet_flow={comparison.total_outlet_flow:.3e} "
-            f"Restored_outlet_flow={comparison.restored_outlet_flow:.3e} "
+            f"nodes=({display_start} to {display_end}) radius={radius:.3f}\n "
+            f"Total_outlet_flow={comparison.total_outlet_flow:.3e}\n "
+            f"Restored_outlet_flow={comparison.restored_outlet_flow:.3e}\n "
             f"VTK={comparison.vtk_path}"
         )
-
-if __name__ == "__main__":
-    main()

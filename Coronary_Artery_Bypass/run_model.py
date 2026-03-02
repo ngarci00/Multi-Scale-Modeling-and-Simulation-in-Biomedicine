@@ -1,7 +1,6 @@
 #Main run script for the Coronary Artery Bypass Model
 #It loads the model, runs the solver, and writes the results to a VTK file for visualization
 #It also prints out some summary information about the solution.
-from __future__ import annotations
 from pathlib import Path
 from assets.model_solver import run_case
 
@@ -16,6 +15,6 @@ def main() -> None:
     for tree_id in sorted(solved_data.tree_outlet_flows):
         print(f"Tree {tree_id}: {solved_data.tree_outlet_flows[tree_id]:.3e}")
     print()
-
+#Run the main function when this script is executed directly
 if __name__ == "__main__":
     main()

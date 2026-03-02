@@ -1,10 +1,11 @@
 #Script to solve the flow in the coronary artery network using Poiseuille's law
 #We also save the results in VTK format for visualization in Paraview!
-from __future__ import annotations
-
-import math, numpy as np, os
+import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
+
+import numpy as np
 
 from .dumpVTK import dumpVTK
 from .model_loader import ArterialNetwork, load_arterial_network
