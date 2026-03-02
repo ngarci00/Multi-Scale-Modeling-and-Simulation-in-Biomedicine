@@ -34,10 +34,6 @@ def read_rows(path):
     with path.open(newline="") as handle:
         reader = csv.reader(handle)
         for row_number, row in enumerate(reader, start=1):
-            if not row:
-                raise ValueError(f"{path.name}: empty row at line {row_number}")
-            if any(cell.strip() == "" for cell in row):
-                raise ValueError(f"{path.name}: blank value at line {row_number}")
             rows.append([cell.strip() for cell in row])
     return rows
 
@@ -50,22 +46,15 @@ def load_float_matrix(path, expected_cols):
             raise ValueError(
                 f"{path.name}: Expected {expected_cols} columns, found {len(row)} at line {row_number}"
             )
-        try:
+        else:
             matrix.append(tuple(float(value) for value in row))
-        except ValueError as exc:
-            raise ValueError(f"{path.name}: non-numeric value at line {row_number}") from exc
     return matrix
 
 def load_vector(path):
     rows = read_rows(path)
     values = []
     for row_number, row in enumerate(rows, start=1):
-        if len(row) != 1:
-            raise ValueError(f"{path.name}: expected 1 column, found {len(row)} at line {row_number}")
-        try:
-            value = int(row[0])
-        except ValueError as exc:
-            raise ValueError(f"{path.name}: non-integer value at line {row_number}") from exc
+        value = int(row[0])
         values.append(value)
     return values
 
@@ -75,24 +64,13 @@ def load_matrix_int(path, expected_cols):
     rows = read_rows(path)
     matrix = []
     for row_number, row in enumerate(rows, start=1):
-        if len(row) != expected_cols:
-            raise ValueError(
-                f"{path.name}: expected {expected_cols} columns, found {len(row)} at line {row_number}"
-            )
-        try:
-            matrix.append(tuple(int(value) for value in row))
-        except ValueError as exc:
-            raise ValueError(f"{path.name}: non-integer value at line {row_number}") from exc
+        matrix.append(tuple(int(value) for value in row))
     return matrix
 
 #Converts 1-based indices from the CSV file (bc MATLAB uses 1-based indx) to 0-based indices in Python
 def _to_zero_based(values, name, upper_bound=None):
     normalized = []
     for index, value in enumerate(values, start=1):
-        if upper_bound is not None and not 1 <= value <= upper_bound:
-            raise ValueError(
-                f"{name}: value {value} at position {index} is outside the valid range 1..{upper_bound}"
-            )
         normalized.append(value - 1)
     return normalized
 
@@ -171,5 +149,4 @@ def load_arterial_network(data_path=None):
 if __name__ == "__main__":
     network = load_arterial_network()
     print(
-        f"\nLoaded arterial network from {network.data_path} with {network.n_points} points and {network.n_branches} branches.\n"
-    )
+        f"\nLoaded arterial network from {network.data_path} with {network.n_points} points and {network.n_branches} branches.\n")

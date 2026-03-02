@@ -3,9 +3,10 @@
 from dataclasses import dataclass
 #dataclasses is a convienient library for defining simple classes that are primarily used to store data.
 from pathlib import Path
-from assets.model_loader import load_arterial_network
-from assets.model_solver import SolverConfig, save_solution_vtk, solve_network
 
+#This keeps the file easy to run directly from assets/ while still working as a project import.
+from .model_loader import load_arterial_network
+from .model_solver import SolverConfig, save_solution_vtk, solve_network
 
 @dataclass
 class GraftComparison:
@@ -75,3 +76,6 @@ def main():
             f"Restored_outlet_flow={comparison.restored_outlet_flow:.3e}\n "
             f"VTK={comparison.vtk_path}"
         )
+
+if __name__ == "__main__":
+    main()
