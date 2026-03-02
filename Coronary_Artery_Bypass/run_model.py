@@ -4,7 +4,7 @@
 from pathlib import Path
 from assets.model_solver import run_case
 
-def main() -> None:
+def main():
     default_output = Path(__file__).resolve().parent / "results" / "coronary_solution.vtk"
     network_data, solved_data, vtk_path = run_case(output_vtk=default_output)
     total_outlet_flow = sum(solved_data.outlet_boundary_flows)

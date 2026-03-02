@@ -7,22 +7,12 @@ def dumpVTK(filename, npoin, nelem, xyz, ele, clr, *, vtk_cell_type=None, zero_b
         os.makedirs(directory, exist_ok=True)#Makes the directory if it doesn't exist, but does nothing if it does exist
 
     cells = [tuple(int(node) for node in cell) for cell in ele]
-    if nelem != len(cells):
-        raise ValueError(f'Expected {nelem} elements, received {len(cells)}.')
-    if not cells:
-        raise ValueError('At least one element is required to write a VTK file.')
-
     cell_size = len(cells[0])
-    if any(len(cell) != cell_size for cell in cells):
-        raise ValueError('All elements must have the same number of nodes.')
-
     if vtk_cell_type is None:
         if cell_size == 2:
             vtk_cell_type = 3 #VTK_LINE
-        elif cell_size == 3:
-            vtk_cell_type = 5 #VTK_TRIANGLE
         else:
-            raise ValueError(f'Unsupported cell size: {cell_size}.')
+            vtk_cell_type = 5 #VTK_TRIANGLE
 
     cell_record_size = nelem * (cell_size + 1)
 

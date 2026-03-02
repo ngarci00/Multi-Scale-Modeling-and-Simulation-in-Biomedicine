@@ -10,13 +10,13 @@ from assets.model_solver import SolverConfig, save_solution_vtk, solve_network
 @dataclass
 class GraftComparison:
     graft_index: int
-    graft: tuple[int, int, float]
+    graft: tuple
     total_outlet_flow: float
     restored_outlet_flow: float
     vtk_path: Path
 
 #Helper function to calculate the total outlet flow from the solution.
-def total_outlet_flow(network, solution) -> float:
+def total_outlet_flow(network, solution):
     total_flow = 0.0
     outlet_set = set(network.outlet_points)
     for (start, end), flow in zip(solution.vtk_cells, solution.branch_flows):
@@ -27,14 +27,14 @@ def total_outlet_flow(network, solution) -> float:
     return total_flow
 
 #Function to compare all grafts options by the total outlet flow they restore compared to the baseline.
-def compare_graft_options() -> tuple[float, list[GraftComparison]]:
+def compare_graft_options():
     network = load_arterial_network()
     baseline_solution = solve_network(network=network, config=SolverConfig())
     baseline_flow = total_outlet_flow(network, baseline_solution)
     output_dir = Path(__file__).resolve().parent.parent / "results"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    comparisons: list[GraftComparison] = []
+    comparisons = []
     for graft_index, graft in enumerate(network.graft_options):
         solution = solve_network(
             network=network,
@@ -57,7 +57,7 @@ def compare_graft_options() -> tuple[float, list[GraftComparison]]:
     return baseline_flow, comparisons
 
 #Main entry point for comparison script, it also runs the comparison and prints out the results:
-def main() -> None:
+def main():
     baseline_flow, comparisons = compare_graft_options()
 
     print("\nOccluded baseline (no graft)")

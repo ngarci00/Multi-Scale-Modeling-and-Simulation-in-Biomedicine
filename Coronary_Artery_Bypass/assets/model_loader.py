@@ -6,34 +6,30 @@ from dataclasses import dataclass
 #a bounch of code to init the class, so basically automates __init__ and other mdethods.
 from pathlib import Path 
 #This in adjection to os.path provides a way to handle file paths so there is no compatibility issues
-from typing import Iterable
-#typing: provides support for type hints, which are a way to indicate the expected types of variables;
-#for example, a function that expects int input can be annotated with def func(x:int) -> None: 
-#to indicate that x should be an integer and the functions returns nothing!
 
 @dataclass
 class ArterialNetwork:
-    points: list[tuple[float, float, float]] #coronary.ptxyz.csv
-    branches: list[tuple[int, int]] #coronary.elems.csv
-    branch_radii: list[float] #coronary.elrad.csv
-    branch_tree: list[int] #coronary.eltre.csv
-    inlet_points: list[int] #coronary.bcinl.csv
-    outlet_points: list[int] #coronary.bcout.csv
-    occluded_branches: list[int] #coronary.occlu.csv
-    graft_options: list[tuple[int, int, float]] #coronary.graft.csv (start point, end point, radius)
+    points: list #coronary.ptxyz.csv
+    branches: list #coronary.elems.csv
+    branch_radii: list #coronary.elrad.csv
+    branch_tree: list #coronary.eltre.csv
+    inlet_points: list #coronary.bcinl.csv
+    outlet_points: list #coronary.bcout.csv
+    occluded_branches: list #coronary.occlu.csv
+    graft_options: list #coronary.graft.csv (start point, end point, radius)
     n_points: int #number of points in the network
     n_branches: int #number of branches in the network
     data_path: Path #directory where the data files are loaded from
 
 #Loading the data from the csv file, and converting into appropriate data structures. 
-def data_dir(data_path: str | os.PathLike | None = None) -> Path:
+def data_dir(data_path=None):
     if data_path is None:
         return (Path(__file__).resolve().parent.parent / "data").resolve()
     return Path(os.fspath(data_path)).expanduser().resolve()
 
 #Reading the rows from the csv file & stripping whitespaces.
-def read_rows(path: Path) -> list[list[str]]:
-    rows: list[list[str]] = [] #list of rows, where each row is a list of strings
+def read_rows(path):
+    rows = [] #list of rows, where each row is a list of strings
     
     with path.open(newline="") as handle:
         reader = csv.reader(handle)
@@ -46,9 +42,9 @@ def read_rows(path: Path) -> list[list[str]]:
     return rows
 
 #Loading the data from the csv file, and converting into appropriate data structures!
-def load_float_matrix(path: Path, expected_cols: int) -> list[tuple[float, ...]]:
+def load_float_matrix(path, expected_cols):
     rows = read_rows(path)
-    matrix: list[tuple[float, ...]] = []
+    matrix = []
     for row_number, row in enumerate(rows, start=1):
         if len(row) != expected_cols:
             raise ValueError(
@@ -60,9 +56,9 @@ def load_float_matrix(path: Path, expected_cols: int) -> list[tuple[float, ...]]
             raise ValueError(f"{path.name}: non-numeric value at line {row_number}") from exc
     return matrix
 
-def load_vector(path: Path) -> list[int]:
+def load_vector(path):
     rows = read_rows(path)
-    values: list[int] = []
+    values = []
     for row_number, row in enumerate(rows, start=1):
         if len(row) != 1:
             raise ValueError(f"{path.name}: expected 1 column, found {len(row)} at line {row_number}")
@@ -75,9 +71,9 @@ def load_vector(path: Path) -> list[int]:
 
 #Loading the data from the csv file, and converting into appropriate data structures (:
 #expects a matrix of integers, and checks # of col and data types
-def load_matrix_int(path: Path, expected_cols: int) -> list[tuple[int, ...]]:
+def load_matrix_int(path, expected_cols):
     rows = read_rows(path)
-    matrix: list[tuple[int, ...]] = []
+    matrix = []
     for row_number, row in enumerate(rows, start=1):
         if len(row) != expected_cols:
             raise ValueError(
@@ -90,10 +86,8 @@ def load_matrix_int(path: Path, expected_cols: int) -> list[tuple[int, ...]]:
     return matrix
 
 #Converts 1-based indices from the CSV file (bc MATLAB uses 1-based indx) to 0-based indices in Python
-def _to_zero_based(
-    values: Iterable[int], *, name: str, upper_bound: int | None = None
-) -> list[int]:
-    normalized: list[int] = []
+def _to_zero_based(values, name, upper_bound=None):
+    normalized = []
     for index, value in enumerate(values, start=1):
         if upper_bound is not None and not 1 <= value <= upper_bound:
             raise ValueError(
@@ -103,7 +97,7 @@ def _to_zero_based(
     return normalized
 
 #Main function to load the arterial network data from the csv files and represent it as a structured data class
-def load_arterial_network(data_path: str | os.PathLike | None = None) -> ArterialNetwork:
+def load_arterial_network(data_path=None):
     resolved_data_dir = data_dir(data_path)
     #file paths and names 
     points_path = resolved_data_dir / "coronary.ptxyz.csv"
@@ -128,40 +122,32 @@ def load_arterial_network(data_path: str | os.PathLike | None = None) -> Arteria
     n_branches = len(raw_branches)
     branch_radii = [row[0] for row in raw_radii_rows] #radius values: first column of the elrad matrix
 
-    if len(branch_radii) != n_branches:
-        raise ValueError(
-            f"{radii_path.name}: branch radii count {len(branch_radii)} does not match branch count {n_branches}"
-        )
-    if len(raw_tree) != n_branches:
-        raise ValueError(
-            f"{tree_path.name}: branch tree count {len(raw_tree)} does not match branch count {n_branches}"
-        )
-
-    branches: list[tuple[int, int]] = [] #branch connectivity: pairs of point indices that define each branch
+    branches = [] #branch connectivity: pairs of point indices that define each branch
     for row_number, (start, end) in enumerate(raw_branches, start=1): #iterating through the rows of the branch connectivity 
         zero_based_pair = _to_zero_based(
             [start, end],
-            name=f"{branches_path.name}: branch endpoints at row {row_number}",
-            upper_bound=n_points,
+            f"{branches_path.name}: branch endpoints at row {row_number}",
+            n_points,
         )
         branches.append((zero_based_pair[0], zero_based_pair[1]))
+        
     #Converting the 1-based indices from the CSV files to 0-based indices for Python
-    inlet_points = _to_zero_based(raw_inlets, name=inlet_path.name, upper_bound=n_points)
-    outlet_points = _to_zero_based(raw_outlets, name=outlet_path.name, upper_bound=n_points)
+    inlet_points = _to_zero_based(raw_inlets, inlet_path.name, n_points)
+    outlet_points = _to_zero_based(raw_outlets, outlet_path.name, n_points)
     occluded_branches = _to_zero_based(
-        raw_occlusions, name=occlusion_path.name, upper_bound=n_branches
+        raw_occlusions, occlusion_path.name, n_branches
     )
     #Graft Options: list of tuples containing the start point indx, and end point indx, 
     #side note: a tuple is an immutable sequence of values, example: (1,2,3) is a tuple of three integers.
-    graft_options: list[tuple[int, int, float]] = []
+    graft_options = []
     for row_number, row in enumerate(raw_grafts, start=1):
         start = int(row[0])
         end = int(row[1])
         radius = row[2]
         zero_based_pair = _to_zero_based(
             [start, end],
-            name=f"{graft_path.name}: graft nodes at row {row_number}",
-            upper_bound=n_points,
+            f"{graft_path.name}: graft nodes at row {row_number}",
+            n_points,
         )
         graft_options.append((zero_based_pair[0], zero_based_pair[1], radius))
 
