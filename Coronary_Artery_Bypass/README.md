@@ -1,1 +1,1 @@
-![coronary_solution](/Users/nicolasgarciacallejas/Documents/GitHub/Multi-Scale-Modeling-and-Simulation-in-Biomedicine/Coronary_Artery_Bypass/results/coronary_solution.vtk)
+![coronary_solution](https://github.com/ngarci00/Multi-Scale-Modeling-and-Simulation-in-Biomedicine/blob/main/Coronary_Artery_Bypass/results/coronary_solution.png)
