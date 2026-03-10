@@ -14,6 +14,7 @@ class GraftComparison:
     total_outlet_flow: float
     restored_outlet_flow: float
     vtk_path: Path
+
 #Helper function to calculate the total outlet flow from the solution.
 def total_outlet_flow(network, solution):
     total_flow = 0.0
@@ -33,8 +34,9 @@ def compare_graft_options():
     output_dir = Path(__file__).resolve().parent.parent / "results"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    comparisons = []
+    comparisons = [] #Stores the results for each graft option 
     
+    #for loop: iteration throughe each graft option, solving the arterial network with graft, results in outlet flow, saves into VTK file
     for graft_index, graft in enumerate(network.graft_options):
         solution = solve_network(
             network=network,
