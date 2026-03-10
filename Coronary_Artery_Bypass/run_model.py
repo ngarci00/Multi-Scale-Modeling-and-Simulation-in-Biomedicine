@@ -13,10 +13,10 @@ def print_graft_comparisons():
     print(f"Baseline (occluded) total outlet flow: {baseline_flow:.3e}\n")
     for rank, comparison in enumerate(comparisons, start=1):
         start, end, radius = comparison.graft
-        display_start = start + 1 #Convert to 1-based indexing for display
-        display_end = end + 1
+        display_start = start+1 #Convert to 1-based indexing for display
+        display_end = end+1
         print(
-            f"{rank}. Graft_index={comparison.graft_index} "
+            f"{rank}. Graft_index={comparison.graft_index+1} "
             f"nodes=({display_start} to {display_end}) radius={radius:.3f}\n "
             f"Total_outlet_flow={comparison.total_outlet_flow:.3e}\n "
             f"Restored_outlet_flow={comparison.restored_outlet_flow:.3e} "
