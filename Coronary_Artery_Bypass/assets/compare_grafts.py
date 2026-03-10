@@ -14,7 +14,6 @@ class GraftComparison:
     total_outlet_flow: float
     restored_outlet_flow: float
     vtk_path: Path
-
 #Helper function to calculate the total outlet flow from the solution.
 def total_outlet_flow(network, solution):
     total_flow = 0.0
