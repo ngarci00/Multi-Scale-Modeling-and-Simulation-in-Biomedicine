@@ -13,6 +13,7 @@ class GraftComparison:
     graft: tuple #tuple means (start_node, end_node, radius) for the graft
     total_outlet_flow: float
     restored_outlet_flow: float
+    restored_tree_flows: dict #restored flow by artery tree id
     vtk_path: Path
 
 #Helper function to calculate the total outlet flow from the solution.
@@ -34,6 +35,7 @@ def compare_graft_options():
     network = load_arterial_network()
     baseline_solution = solve_network(network=network, config=SolverConfig())
     baseline_flow = total_outlet_flow(network, baseline_solution)
+    baseline_tree_flow = baseline_solution.tree_outlet_flows
     output_dir = Path(__file__).resolve().parent.parent / "results"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -46,6 +48,13 @@ def compare_graft_options():
             config=SolverConfig(graft_index=graft_index),
         )
         total_flow = total_outlet_flow(network, solution)
+        restored_tree_flows = {}
+
+        #for loop: calculates the restored flow for each tree by comparing the solution with baseline flow
+        for tree_id in sorted(set(solution.tree_outlet_flows) | set(baseline_tree_flow)):
+            restored_tree_flows[tree_id] = (
+                solution.tree_outlet_flows.get(tree_id, 0.0) - baseline_tree_flow.get(tree_id, 0.0)
+            )
         vtk_path = output_dir / f"graft_option_{graft_index}.vtk"
         save_solution_vtk(network, solution, vtk_path)
         comparisons.append(
@@ -54,6 +63,7 @@ def compare_graft_options():
                 graft=graft,
                 total_outlet_flow=total_flow,
                 restored_outlet_flow=total_flow - baseline_flow,
+                restored_tree_flows=restored_tree_flows,
                 vtk_path=vtk_path,
             )
         )
@@ -80,6 +90,8 @@ def main():
             f"Restored_outlet_flow={comparison.restored_outlet_flow:.3e}\n "
             f"VTK={comparison.vtk_path}"
         )
+        for tree_id, restored_flow in comparison.restored_tree_flows.items():
+            print(f"  Tree {tree_id}: restored_flow={restored_flow:.3e}")
 
 if __name__ == "__main__":
     main()
