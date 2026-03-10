@@ -19,6 +19,9 @@ class GraftComparison:
 def total_outlet_flow(network, solution):
     total_flow = 0.0
     outlet_set = set(network.outlet_points)
+
+    #for loop: iterating through each branch and flow, checking if either endpoint is an outlet
+    #if outlet then is added to total flow
     for (start, end), flow in zip(solution.vtk_cells, solution.branch_flows):
         if end in outlet_set:
             total_flow += flow #if total flow is positive, flow is going out of the otulet, if negative flow is going into the outlet.

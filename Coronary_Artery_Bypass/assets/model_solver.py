@@ -296,7 +296,6 @@ def save_solution_vtk(network, solution, filename):
 
     return filepath
 
-
 #Main function to run the entire case: load the network, solve for the flow, save the vtk solution
 def run_case(data_dir=None, output_vtk=None, config=None):
     network = load_arterial_network(data_dir)
