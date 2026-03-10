@@ -1,13 +1,14 @@
 #Script to solve the flow in the coronary artery network using Poiseuille's law
 #We also save the results in VTK format for visualization in Paraview!
 import os, math, pathlib, numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass #the advantage of using dataclasses is that they automatically generate init and repr methods..
+#which make it easier to create and print instances of the class. Also provide an easy way to define class attributes.
 from pathlib import Path
 #This keeps the file usable both when imported from run_model.py and when run directly inside assets/.
 from .dumpVTK import dumpVTK
 from .model_loader import ArterialNetwork, load_arterial_network
 
-#Parameter class to hold the desired config for the solver
+#Data class to hold the configuration PARAMETERS for the solver
 @dataclass
 class SolverConfig:
     viscosity: float = 0.04 #mmHg*s
@@ -17,6 +18,7 @@ class SolverConfig:
     occlusion_radius_fraction: float = 0.01 #fraction of original radius for occluded branches (%Stenosis)
     graft_index: int | None = None  #index of the graft option to use
 
+#Data class to hold the solution of the flows, pressure, and other info regarding the arterial network after solving.
 @dataclass
 class FlowSolution:
     pressures: list #pressure at each node
@@ -56,11 +58,15 @@ def effective_networks(network, config):
     occluded_flags = [0] * len(vtk_cells)
     graft_flags = [0] * len(vtk_cells)
 
+    #for loop to apply occlusion to the specified branches by reducing their effective radius and marking them as occluded
     for branch_index in network.occluded_branches:
         effective_radii[branch_index] *= config.occlusion_radius_fraction
         occluded_flags[branch_index] = 1
 
     graft_used = None
+
+    #if statement: if a graft option is specified in the config, we add it as an additional branch to the network.
+    #this way we can solve the flow with the graft included without needing to modify the original structure.
     if config.graft_index is not None:
         graft_used = network.graft_options[config.graft_index]
         graft_start, graft_end, graft_radius = graft_used
@@ -70,7 +76,9 @@ def effective_networks(network, config):
         occluded_flags.append(0)
         graft_flags.append(1)
 
-    resistances = []
+    resistances = [] #stores the computed resistances for each branch 
+
+    #for loop: compute the resistance of each branch using Poiseuille's Law based on length, eff radius, and viscosity
     for length, radius in zip(lengths, effective_radii):
         resistances.append(poiseuille_resistance(length, radius, config.viscosity))
 
@@ -79,7 +87,11 @@ def effective_networks(network, config):
 
 #Set the known pressures from the chosen boundary conditions
 def known_pressures(network, config):
-    known = {}
+
+    known = {} #holds the known pressures at the inlet and outlet nodes based on the config.
+
+    #for loop: set the inlet pressures at the inlet nodes to the specified inlet pressure in the config.
+    #if statement: if outlet resistance is not used, then we set the outlet pressure at the outlet nodes to an specified outlet pressure 
     for node in network.inlet_points:
         known[node] = config.inlet_pressure
     if config.outlet_resistance is None:
@@ -93,11 +105,14 @@ def solve_pressures(network, vtk_cells, resistances, config):
     known = known_pressures(network, config)
     unknown_nodes = [node for node in range(network.n_points) if node not in known]
 
-    adjacency = [[] for _ in range(network.n_points)]
+    adjacency = [[] for _ in range(network.n_points)] #Adjecent list to store the branches conneted to each node
+
+    #for loop: build the adjacency list for the network based on vtk_cells and their resistances.
     for branch_index, ((start, end), resistance) in enumerate(zip(vtk_cells, resistances)):
         adjacency[start].append((branch_index, resistance))
         adjacency[end].append((branch_index, resistance))
 
+    #if statement: if there are no unknown nodes, then we can return the pressures directly from the known dictionary
     if not unknown_nodes:
         pressures = [0.0] * network.n_points
         for node, pressure in known.items():
@@ -106,10 +121,12 @@ def solve_pressures(network, vtk_cells, resistances, config):
 
     node_to_row = {node: row for row, node in enumerate(unknown_nodes)}
     matrix = np.zeros((len(unknown_nodes), len(unknown_nodes)), dtype=float)
-    rhs = np.zeros(len(unknown_nodes), dtype=float)
+    rhs = np.zeros(len(unknown_nodes), dtype=float) 
 
+    #for loop: assemble the linear system for the unknown pressures based on the adjacency list and known pressures
+    #We use Kirchhoff's law at every uknown node
     for node in unknown_nodes:
-        row = node_to_row[node]
+        row = node_to_row[node] 
         for branch_index, resistance in adjacency[node]:
             start, end = vtk_cells[branch_index]
             neighbor = end if start == node else start
@@ -129,6 +146,8 @@ def solve_pressures(network, vtk_cells, resistances, config):
     solved = np.linalg.solve(matrix, rhs)
 
     pressures = [0.0] * network.n_points
+
+    #for loops: fill the pressure list with the solved pressures for unknown nodes & same for known nodes.
     for node, pressure in known.items():
         pressures[node] = pressure
     for node, row in node_to_row.items():
@@ -141,6 +160,7 @@ def outlet_boundary_flows(network, pressures, branch_flows, vtk_cells, config):
     outlet_to_index = {node: index for index, node in enumerate(network.outlet_points)}
     flows = [0.0] * len(network.outlet_points)
 
+    #if statement: if outlet resistance is not used, we compute the outlet flows by summing the contributons from each branch connected to outlet
     if config.outlet_resistance is None:
         for (start, end), flow in zip(vtk_cells, branch_flows):
             if end in outlet_to_index:
@@ -159,6 +179,7 @@ def tree_outlet_flows(network, branch_flows, vtk_cells):
     outlet_set = set(network.outlet_points)
     totals = {}
 
+    #for loop: iterating through each branch and flow, checking if either branch endpoint is an outlet.
     for branch_index, ((start, end), flow) in enumerate(zip(vtk_cells, branch_flows)):
         if branch_index >= len(network.branch_tree):
             continue
@@ -195,6 +216,7 @@ def solve_network(network=None, config=None):
     branch_flows = []
     branch_pressure_drops = []
 
+    #for loop: compute the flow through each branch using the pressure drop across the branch and its resistance
     for (start, end), resistance in zip(vtk_cells, branch_resistances):
         pressure_drop = pressures[start] - pressures[end]
         branch_pressure_drops.append(pressure_drop)
@@ -225,6 +247,8 @@ def write_scalar(handle, name, values, integer=False):
     vtk_type = "int" if integer else "float"
     handle.write(f"SCALARS {name} {vtk_type} 1\n")
     handle.write("LOOKUP_TABLE default\n")
+    
+
     for value in values:
         if integer:
             handle.write(f"{int(value)}\n")
@@ -250,6 +274,7 @@ def save_solution_vtk(network, solution, filename):
     inlet_set = set(network.inlet_points)
     outlet_set = set(network.outlet_points)
 
+    #Adding the scalar fields for pressure, flow, and revelant info about the branches to the VTK file
     with filepath.open("a", newline="") as handle:
         write_scalar(handle, "pressure_drop", solution.branch_pressure_drops)
         write_scalar(handle, "resistance", solution.branch_resistances)

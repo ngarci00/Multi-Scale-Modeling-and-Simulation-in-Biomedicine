@@ -62,14 +62,20 @@ def load_vector(path):
 #expects a matrix of integers, and checks # of col and data types
 def load_matrix_int(path, expected_cols):
     rows = read_rows(path)
-    matrix = []
+
+    matrix = [] #list of rows, where each row is a tuple (int, int) of integers, representing the connectivity of the branches
+
+    #for loop to iterate through the rows of the csv file, and convert each value to an int
     for row_number, row in enumerate(rows, start=1):
         matrix.append(tuple(int(value) for value in row))
     return matrix
 
 #Converts 1-based indices from the CSV file (bc MATLAB uses 1-based indx) to 0-based indices in Python
 def _to_zero_based(values, name, upper_bound=None):
-    normalized = []
+
+    normalized = [] #list of ints, where each int is the corresponding value from the input list
+    
+    #for loop to iterate through the values, and convert each value to an int.
     for index, value in enumerate(values, start=1):
         normalized.append(value - 1)
     return normalized
@@ -87,6 +93,7 @@ def load_arterial_network(data_path=None):
     occlusion_path = resolved_data_dir / "coronary.occlu.csv"
     graft_path = resolved_data_dir / "coronary.graft.csv"
 
+    #using helper function (load_float_matrix, load_vector, load_matrix_int) to read the data from the csv files and convert it into appropriate data structures!
     raw_points = load_float_matrix(points_path, expected_cols=3) #coronary.ptxyz.csv: containing the x,y,z coordinates of each point
     raw_branches = load_matrix_int(branches_path, expected_cols=2) #cornary.elems.csv: define the connectivity of the arterial network
     raw_radii_rows = load_float_matrix(radii_path, expected_cols=1) #coronary.elrad.csv: contains the raidi of each branchin the network
@@ -96,12 +103,15 @@ def load_arterial_network(data_path=None):
     raw_occlusions = load_vector(occlusion_path) #coronary.occlu.csv: identifies which branches are occluded (blocked)
     raw_grafts = load_float_matrix(graft_path, expected_cols=3) #coronary.graft.csv: lists potential grafting options, row: start point, column: end point, radius of the graft
 
+    #Calculating the number of points and branches in the network based on the loaded data.
     n_points = len(raw_points)
     n_branches = len(raw_branches)
     branch_radii = [row[0] for row in raw_radii_rows] #radius values: first column of the elrad matrix
 
     branches = [] #branch connectivity: pairs of point indices that define each branch
-    for row_number, (start, end) in enumerate(raw_branches, start=1): #iterating through the rows of the branch connectivity 
+
+    #for loop to iterate through the rows of the branch connectivity csv file, and convert each value to an int, and also 1-based indices to 0-based indice
+    for row_number, (start, end) in enumerate(raw_branches, start=1):
         zero_based_pair = _to_zero_based(
             [start, end],
             f"{branches_path.name}: branch endpoints at row {row_number}",
@@ -118,6 +128,8 @@ def load_arterial_network(data_path=None):
     #Graft Options: list of tuples containing the start point indx, and end point indx, 
     #side note: a tuple is an immutable sequence of values, example: (1,2,3) is a tuple of three integers.
     graft_options = []
+    
+    #for loop to iterate through the rows of the graft options and convert the start and end points to 0-based indices
     for row_number, row in enumerate(raw_grafts, start=1):
         start = int(row[0])
         end = int(row[1])
@@ -129,7 +141,7 @@ def load_arterial_network(data_path=None):
         )
         graft_options.append((zero_based_pair[0], zero_based_pair[1], radius))
 
-    points = [(x, y, z) for x, y, z in raw_points]
+    points = [(x, y, z) for x, y, z in raw_points] #points coordinates
     branch_tree = list(raw_tree) #branch hierarchy: list of integers where each value indicates the parent branch index (or -1 for root branches)
 
     return ArterialNetwork(
