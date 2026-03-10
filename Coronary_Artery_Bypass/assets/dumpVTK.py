@@ -27,7 +27,7 @@ def dumpVTK(filename, npoin, nelem, xyz, ele, clr, *, vtk_cell_type=None, zero_b
         for cell in cells:
             nodes = cell if zero_based else tuple(node - 1 for node in cell)
             fp.write('%d %s\n' % (cell_size, ' '.join(str(node) for node in nodes)))
-        fp.write('CELL_TYPES %d\n' % nelem)
+        fp.write('CELL_TYPES %d\n' % nelem) #Cell type for each cell, so ParaView knows how to visualize it. 
         for ele in range(nelem):
             fp.write('%d\n' % vtk_cell_type)
         fp.write('CELL_DATA %d\nSCALARS %s float\nLOOKUP_TABLE default\n' % (nelem, scalar_name))

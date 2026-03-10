@@ -3,15 +3,14 @@
 from dataclasses import dataclass
 #dataclasses is a convienient library for defining simple classes that are primarily used to store data.
 from pathlib import Path
-
 #This keeps the file easy to run directly from assets/ while still working as a project import.
 from .model_loader import load_arterial_network
 from .model_solver import SolverConfig, save_solution_vtk, solve_network
 
 @dataclass
 class GraftComparison:
-    graft_index: int
-    graft: tuple
+    graft_index: int #By indexing we can link back to the original graft option in the dataclass
+    graft: tuple #tuple means (start_node, end_node, radius) for the graft
     total_outlet_flow: float
     restored_outlet_flow: float
     vtk_path: Path
@@ -36,6 +35,7 @@ def compare_graft_options():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     comparisons = []
+    
     for graft_index, graft in enumerate(network.graft_options):
         solution = solve_network(
             network=network,
