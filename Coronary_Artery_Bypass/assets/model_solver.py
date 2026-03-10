@@ -154,7 +154,6 @@ def solve_pressures(network, vtk_cells, resistances, config):
         pressures[node] = float(solved[row])
     return pressures
 
-
 #Compute the total flow going through each outlet boundary
 def outlet_boundary_flows(network, pressures, branch_flows, vtk_cells, config):
     outlet_to_index = {node: index for index, node in enumerate(network.outlet_points)}
@@ -172,7 +171,6 @@ def outlet_boundary_flows(network, pressures, branch_flows, vtk_cells, config):
     for outlet_index, node in enumerate(network.outlet_points):
         flows[outlet_index] = (pressures[node] - config.outlet_pressure) / config.outlet_resistance
     return flows
-
 
 #Add up outlet flow separately for each arterial tree
 def tree_outlet_flows(network, branch_flows, vtk_cells):
@@ -193,7 +191,6 @@ def tree_outlet_flows(network, branch_flows, vtk_cells):
         totals[tree_id] = totals.get(tree_id, 0.0) + contribution
 
     return totals
-
 
 #Main function to solve the network and return the full result
 def solve_network(network=None, config=None):
