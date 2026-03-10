@@ -10,7 +10,7 @@ def print_graft_comparisons():
     baseline_flow, comparisons = compare_graft_options()
 
     print("\nGraft ranking by restored outlet flow:")
-    print(f"Baseline (occluded) total outlet flow: {baseline_flow:.3e}\n")
+    print(f"Baseline (occluded) total outlet flow: {baseline_flow:.3e} (mmHg*cm^3/s)\n")
     for rank, comparison in enumerate(comparisons, start=1):
         start, end, radius = comparison.graft
         display_start = start+1 #Convert to 1-based indexing for display
@@ -31,7 +31,6 @@ def main():
     total_outlet_flow = sum(solved_data.outlet_boundary_flows)
 
     print(f"\nSolved {len(solved_data.vtk_cells)} branches on {network_data.n_points} nodes, VTK written to {vtk_path}\n")
-    print(f"Total outlet flow: {total_outlet_flow:.3e} (mmHg*cm^3/s)\n")
     print_graft_comparisons()
 
 
