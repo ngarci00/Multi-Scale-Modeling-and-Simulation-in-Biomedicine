@@ -1,5 +1,6 @@
 import numpy as np
 
+#Function to create a generic particle dictionary with the specified parameters
 def make_particle(kind, radius, mass, position, velocity=None, activated=False, fixed=False):
     """Create a particle dictionary with NumPy position and velocity vectors."""
     if velocity is None:
@@ -14,7 +15,7 @@ def make_particle(kind, radius, mass, position, velocity=None, activated=False, 
         "activated": activated,
         "fixed": fixed,
     }
-
+#Function to create an RBC particle with the specified parameters
 def make_rbc(radius, mass, position, velocity=None, fixed=False):
     """Create one red blood cell particle."""
     return make_particle("RBC", radius, mass, position, velocity, fixed=fixed)
@@ -95,7 +96,7 @@ def sample_non_overlapping_positions(count,radius,x_bounds,y_bounds,rng,existing
 #Function to create fixed RBC particles along the upper and lower vessel walls
 def make_wall_rbc_particles(length, vessel_radius, radius, mass):
     """Create fixed RBC particles along the upper and lower vessel walls."""
-    x_positions = np.arange(radius, length, radius)
+    x_positions = np.arange(radius, length)
     wall_y = vessel_radius - radius
     wall_positions = []
 
@@ -119,10 +120,16 @@ def drag_force(particle, viscosity, vessel_radius, max_velocity):
     )
     v_particle = particle["vel"]
 
-    return 6 * np.pi * viscosity * particle["radius"] * (u_fluid - v_particle)
+    return 6 * np.pi * viscosity * particle["radius"] * (u_fluid - v_particle) #Viscious drag force based on Stokes' law for a sphere in a fluid
 
+
+def drag_relaxation_time(particle, viscosity):
+    """Characteristic drag relaxation time m / (6*pi*mu*r) for one particle."""
+    return particle["mass"] / (6 * np.pi * viscosity * particle["radius"])
+
+#Function to calculate the pairwise contact force between two particles based on a repulsive spring model
 def pairwise_contact_force(particle, other_particle, spring_constant):
-    """Return the repulsive spring force on particle due to overlap with other_particle."""
+    """Repulsive spring force if particles overlap, zero otherwise."""
     displacement = particle["pos"] - other_particle["pos"]
     distance = np.linalg.norm(displacement)
     cutoff = particle["radius"] + other_particle["radius"]
@@ -138,9 +145,9 @@ def pairwise_contact_force(particle, other_particle, spring_constant):
 
     return spring_constant * overlap * direction
 
-
+#Function to calculate the total contact force on a particle from all other particles using the pairwise contact force
 def contact_force(particle, moving_particles, fixed_particles, spring_constant, self_index):
-    """Return the total contact force on a particle from moving and fixed neighbors."""
+    """Total contact force on a particle from all other particles using the pairwise contact force."""
     total_force = np.zeros(2)
 
     for index, other_particle in enumerate(moving_particles):
@@ -153,8 +160,8 @@ def contact_force(particle, moving_particles, fixed_particles, spring_constant, 
 
     return total_force
 
-
-def update_particle_drag_only(particle, dt, viscosity, vessel_radius, max_velocity):
+#Function to update a single particle's velocity and position based on drag force only 
+def update_my_particle_drag(particle, dt, viscosity, vessel_radius, max_velocity):
     """Update the particle's velocity and position based on the drag force."""
     f_drag = drag_force(particle, viscosity, vessel_radius, max_velocity)
     acceleration = f_drag / particle["mass"]
@@ -186,6 +193,3 @@ def update_particles_with_contact(particles,fixed_particles,dt,viscosity,vessel_
         particles[index]["pos"] = snapshot["pos"] + particles[index]["vel"] * dt
 
     return particles
-
-#Temporary alias to avoid breaking earlier code while refactoring.
-update_my_particle_drag = update_particle_drag_only

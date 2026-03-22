@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from assets.model_functions import (
+    drag_relaxation_time,
     make_plt,
     make_plt_population,
     make_wall_rbc_particles,
@@ -17,11 +18,11 @@ from assets.model_functions import (
 #Parameters for the RBCs and PLTs
 rbc_radius = 8.0 #microns
 rbc_mass = 1.1 #nanograms
-plt_radius = None #microns
-plt_mass = None #nanograms
+plt_radius = 1.5 #microns
+plt_mass = 0.0124 #nanograms
 
 n_rbcs = 10 #number of RBCs to simulate
-n_plts = 0 #number of platelets to simulate
+n_plts = 4 #number of platelets to simulate
 rng_seed = 42 #seed for reproducibility
 k_contact = 0.1 #contact spring stiffness
 
@@ -71,6 +72,14 @@ if n_plts > 0:
 
 particles = rbc_particles + plt_particles
 
+#Use a timestep smaller than the fastest drag relaxation timescale.
+if particles:
+    min_relaxation_time = min(
+        drag_relaxation_time(particle, mu) for particle in particles
+    )
+    dt = min(dt, 0.05 * min_relaxation_time)
+    print(f"Using dt = {dt:.3e} s")
+
 #Run the simulation for every RBC
 position_history = [[] for _ in particles] #list of lists to store position history for each particle
 
@@ -92,16 +101,32 @@ for step in range(n_steps):
             )
 #Plotting the trajectories of the RBCs
 plt.figure(figsize=(8, 4))
-for i, history in enumerate(position_history):
+plotted_labels = set()
+for particle, history in zip(particles, position_history):
     history = np.array(history)
-    plt.plot(history[:, 0], history[:, 1], label="RBCs", color="red", marker='o', markersize=10)  
+    if particle["kind"] == "RBC":
+        color = "red"
+        marker_size = 8
+        label = "RBCs"
+    else:
+        color = "gold"
+        marker_size = 5
+        label = "PLTs"
+
+    if label in plotted_labels:
+        label = None
+    else:
+        plotted_labels.add(label)
+
+    plt.plot(history[:, 0],history[:, 1],label=label,color=color,marker="o",markersize=marker_size)
 wall_positions = np.array([particle["pos"] for particle in wall_particles])
-plt.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="red", marker='o', s=36)
+plt.scatter(wall_positions[:, 0],wall_positions[:, 1],label="Wall RBCs",color="firebrick",marker="o",s=6)
 plt.xlabel("D (microns)")
 plt.ylabel("L (microns)")
 plt.title("Platelet Aggregation Model: RBC Trajectories")
 plt.xlim(0, L)
 plt.ylim(-R, R)
+plt.legend()
 os.makedirs("figs", exist_ok=True)
 plt.savefig(os.path.join("figs", "RBC_Trajectories.png"), dpi=200, bbox_inches="tight")
 plt.close()
