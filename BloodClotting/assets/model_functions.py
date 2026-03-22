@@ -15,6 +15,7 @@ def make_particle(kind, radius, mass, position, velocity=None, activated=False, 
         "activated": activated,
         "fixed": fixed,
     }
+
 #Function to create an RBC particle with the specified parameters
 def make_rbc(radius, mass, position, velocity=None, fixed=False):
     """Create one red blood cell particle."""
@@ -25,16 +26,17 @@ def make_plt(radius, mass, position, velocity=None, activated=False):
     """Create one platelet particle."""
     return make_particle("PLT", radius, mass, position, velocity, activated)
 
+#Function to create a list of RBC particles:
 def make_rbc_population(radius, mass, positions, velocity=None, fixed=False):
     """Create a list of RBC particles from an iterable of positions."""
     return [make_rbc(radius, mass, position, velocity, fixed) for position in positions]
 
-
+#Function to create a list of platelet particles:
 def make_plt_population(radius, mass, positions, velocity=None, activated=False):
     """Create a list of platelet particles from an iterable of positions."""
     return [make_plt(radius, mass, position, velocity, activated) for position in positions]
 
-
+#Function to sample random positions within the specified bounds:
 def sample_random_positions(count, x_bounds, y_bounds, rng):
     """Sample uniformly random 2D positions inside the provided bounds."""
     x_min, x_max = x_bounds
@@ -160,6 +162,66 @@ def contact_force(particle, moving_particles, fixed_particles, spring_constant, 
 
     return total_force
 
+#Function to find the nearest point on the damaged wall:
+def nearest_damage_point(position, damage_region):
+    """Return the closest point on the damaged wall segment to a particle position."""
+    x_coord = np.clip(position[0], damage_region["x_min"], damage_region["x_max"])
+    return np.array([x_coord, damage_region["y"]], dtype=float)
+
+#Function to check if a platelet is within the adhesion cutoff distance of the damaged region:
+def platelet_in_damage_zone(particle, damage_region, adhesion_cutoff):
+    """Return True if a platelet is close enough to the damage region to activate."""
+    if particle["kind"] != "PLT":
+        return False
+
+    target = nearest_damage_point(particle["pos"], damage_region)
+    return np.linalg.norm(particle["pos"] - target) <= adhesion_cutoff
+
+#Function to calculate the adhesion force on an activated PLTs from the damaged wall and other PLTs:
+def wall_adhesion_force(particle, damage_region, adhesion_spring, adhesion_cutoff):
+    """Attractive force pulling an activated platelet toward the damage region."""
+    if particle["kind"] != "PLT" or not particle["activated"]:
+        return np.zeros(2)
+
+    target = nearest_damage_point(particle["pos"], damage_region)
+    displacement = particle["pos"] - target
+    distance = np.linalg.norm(displacement)
+
+    if distance == 0 or distance > adhesion_cutoff:
+        return np.zeros(2)
+
+    direction = displacement / distance
+    return -adhesion_spring * (adhesion_cutoff - distance) * direction
+
+#Function to calculate the adhesion force between activated PLTs based on their distance and the adhesion cutoff:
+def platelet_pair_adhesion_force(particle, other_particle, adhesion_spring, adhesion_cutoff):
+    """Attractive platelet-platelet adhesion force for activated platelets."""
+    if particle["kind"] != "PLT" or other_particle["kind"] != "PLT":
+        return np.zeros(2)
+    if not particle["activated"] or not other_particle["activated"]:
+        return np.zeros(2)
+
+    displacement = particle["pos"] - other_particle["pos"]
+    distance = np.linalg.norm(displacement)
+
+    if distance == 0 or distance > adhesion_cutoff:
+        return np.zeros(2)
+
+    direction = displacement / distance
+    return -adhesion_spring * (adhesion_cutoff - distance) * direction
+
+
+def adhesion_force(particle,moving_particles,damage_region,adhesion_spring,adhesion_cutoff,self_index):
+    """Total adhesion force on a platelet from the damage region and other activated platelets."""
+    total_force = wall_adhesion_force(particle,damage_region,adhesion_spring,adhesion_cutoff) #Adhesion force from the damaged wall
+
+    for index, other_particle in enumerate(moving_particles):
+        if index == self_index:
+            continue
+        total_force += platelet_pair_adhesion_force(particle,other_particle,adhesion_spring,adhesion_cutoff) #Adhesion force from other activated platelets
+
+    return total_force #Total force = wall adhesion + platelet-platelet adhesion
+
 #Function to update a single particle's velocity and position based on drag force only 
 def update_my_particle_drag(particle, dt, viscosity, vessel_radius, max_velocity):
     """Update the particle's velocity and position based on the drag force."""
@@ -187,6 +249,37 @@ def update_particles_with_contact(particles,fixed_particles,dt,viscosity,vessel_
         drag = drag_force(snapshot, viscosity, vessel_radius, max_velocity)
         contact = contact_force(snapshot,particle_snapshots,fixed_particles,spring_constant,index,)
         total_force = drag + contact
+        acceleration = total_force / snapshot["mass"]
+
+        particles[index]["vel"] = snapshot["vel"] + acceleration * dt
+        particles[index]["pos"] = snapshot["pos"] + particles[index]["vel"] * dt
+
+    return particles
+
+#Function to update all particles with both contact and adhesion forces using a common snapshot
+def update_particles_with_adhesion(particles,fixed_particles,dt,viscosity,vessel_radius,max_velocity,contact_spring,damage_region,adhesion_spring,adhesion_cutoff,):
+    """Advance moving particles using drag, contact, and platelet-specific adhesion."""
+    #snapshot of particle state at the start of the time step
+    particle_snapshots = [
+        {
+            **particle,
+            "pos": particle["pos"].copy(),
+            "vel": particle["vel"].copy(),
+        }
+        for particle in particles
+    ]
+    #For loop: Check for PLT activation based on proximity to the damaged region
+    for index, snapshot in enumerate(particle_snapshots):
+        if platelet_in_damage_zone(snapshot, damage_region, adhesion_cutoff):
+            snapshot["activated"] = True
+            particles[index]["activated"] = True
+
+    #Calculate forces and update each particle based on the snapshot 
+    for index, snapshot in enumerate(particle_snapshots):
+        drag = drag_force(snapshot, viscosity, vessel_radius, max_velocity)
+        contact = contact_force(snapshot,particle_snapshots,fixed_particles,contact_spring,index)
+        adhesion = adhesion_force(snapshot,particle_snapshots,damage_region,adhesion_spring,adhesion_cutoff,index,)
+        total_force = drag + contact + adhesion
         acceleration = total_force / snapshot["mass"]
 
         particles[index]["vel"] = snapshot["vel"] + acceleration * dt
