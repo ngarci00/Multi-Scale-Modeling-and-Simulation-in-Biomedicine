@@ -10,21 +10,22 @@ from matplotlib.animation import FuncAnimation
 #Parameters for the RBCs and PLTs
 rbc_radius = 8.0 #microns
 rbc_mass = 1.1 #nanograms
+
 plt_radius = 1.5 #microns
 plt_mass = 0.0124 #nanograms
 
 n_rbcs = 40 #number of RBCs to simulate
-n_plts = 40 #number of platelets to simulate
+n_plts = 30 #number of platelets to simulate
 rng_seed = 42 #seed for reproducibility
 k_contact = 0.1 #contact spring stiffness, high k_contact means less overlap between particles,low k_contact means more overlap allowed.
-k_adhesion = 0.8 #adhesion spring stiffness for platelets <- adhest for sensitivity on PLTs adhesion strength
+k_adhesion = 1.0 #adhesion spring stiffness for platelets <- adhest for sensitivity on PLTs adhesion strength
 
 #Time stepping for the drag-only simulation
-dt = 1e-8  #seconds
-n_steps = 100 #number of simulation steps to run
+dt = 1e-6  #time step in seconds
+n_steps = 1000 #number of simulation steps to run
 
 #Platelet template for later use once parameters are confirmed
-platelet = make_plt(plt_radius, plt_mass, [50.0, 0.0])
+platelet = make_plt(plt_radius, plt_mass, [50.0, 0.0], activated=True, adhered=True)
 
 #Domain Parameters:
 #Vessel & Flow Parameters
@@ -61,7 +62,7 @@ def overlaps_existing_particles(candidate_position, candidate_radius, other_part
 #Random initial positions inside the vessel bounds:
 rbc_positions = sample_non_overlapping_positions(n_rbcs,rbc_radius,(rbc_radius, L - rbc_radius),(-R + rbc_radius, R - rbc_radius),rng,existing_particles=wall_particles)
 #Create the RBC particles based on the sampled positions:
-rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions)
+rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions,fixed=False, velocity=[10.0, 0.0]) #RBCs start with zero velocity and are free to move
 
 plt_particles = [] #Empty list to hold PLT particles
 
@@ -109,7 +110,7 @@ if n_plts > 0:
             )
         )
 
-    plt_particles = make_plt_population(plt_radius, plt_mass, plt_positions)
+    plt_particles = make_plt_population(plt_radius, plt_mass, plt_positions,activated=False, adhered=False) #PLTs start activated and adhered to test the adhesion model right away
 
 #Combining RBC and PLT particles into a single list for the simulation:
 particles = rbc_particles + plt_particles
@@ -200,9 +201,11 @@ ax.legend()
 def update(frame):
     rbc_positions = []
     plt_positions = []
+    visual_scale = 1000
 
     for particle, history in zip(particles, position_history):
-        pos = history[frame]
+        start = history[0]
+        pos = start + visual_scale * (history[frame] - start)
         if particle["kind"] == "RBC":
             rbc_positions.append(pos)
         else:
@@ -217,7 +220,7 @@ def update(frame):
 
     return rbc_scatter, plt_scatter, wall_scatter
 
-animation = FuncAnimation(fig, update, frames=range(0, n_steps, 5), interval=50, blit=False)
+animation = FuncAnimation(fig, update, frames=range(0, n_steps, 10), interval=50, blit=False)
 save_path = os.path.join("figs", "Platelet_Aggregation_Animation.gif")
 animation.save(save_path, writer="pillow", fps=20)
 print(f"Animation saved to {save_path}")

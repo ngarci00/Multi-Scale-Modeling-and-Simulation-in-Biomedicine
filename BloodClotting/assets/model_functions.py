@@ -32,7 +32,7 @@ def make_rbc(radius, mass, position, velocity=None, fixed=False):
     return make_particle("RBC", radius, mass, position, velocity, fixed=fixed)
 
 #Function to create a platelet particle with the specified parameters
-def make_plt(radius, mass, position, velocity=None, activated=False, adhered=False):
+def make_plt(radius, mass, position, velocity=None, activated=False, adhered=True):
     """Create one platelet particle."""
     return make_particle("PLT",radius,mass,position,velocity,activated=activated,adhered=adhered)
 
