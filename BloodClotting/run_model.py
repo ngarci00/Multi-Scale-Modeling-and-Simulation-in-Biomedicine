@@ -5,6 +5,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 import numpy as np
 import matplotlib.pyplot as plt
 from assets.model_functions import (drag_relaxation_time,make_plt,make_plt_population,make_wall_rbc_particles,make_rbc_population,sample_non_overlapping_positions,update_particles_with_adhesion,)
+from matplotlib.animation import FuncAnimation
 
 #Parameters for the RBCs and PLTs
 rbc_radius = 8.0 #microns
@@ -187,4 +188,49 @@ plt.ylim(-R, R)
 plt.legend()
 os.makedirs("figs", exist_ok=True)
 plt.savefig(os.path.join("figs", "RBC_Trajectories.png"), dpi=200, bbox_inches="tight")
+plt.close()
+
+#Adding the animation using matplotlib's FuncAnimation
+fig, ax = plt.subplots(figsize=(8, 4))
+rbc_scatter = ax.scatter([], [], label="RBCs", color="red", s=30, marker="o")
+plt_scatter = ax.scatter([], [], label="PLTs", color="gold", s=15, marker="o")
+wall_scatter = ax.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", s=6)
+ax.plot(
+    [damage_region["x_min"], damage_region["x_max"]],
+    [damage_region["y"], damage_region["y"]],
+    color="orange",
+    linewidth=6,
+    label="Damage Region",
+)
+ax.set_xlim(0, L)
+ax.set_ylim(-R, R)
+ax.set_xlabel("D (microns)")
+ax.set_ylabel("L (microns)")
+ax.set_title("Platelet Aggregation Model Animation")
+ax.legend()
+
+def update(frame):
+    rbc_positions = []
+    plt_positions = []
+
+    for particle, history in zip(particles, position_history):
+        pos = history[frame]
+        if particle["kind"] == "RBC":
+            rbc_positions.append(pos)
+        else:
+            plt_positions.append(pos)
+
+    rbc_offsets = np.array(rbc_positions) if rbc_positions else np.empty((0, 2))
+    plt_offsets = np.array(plt_positions) if plt_positions else np.empty((0, 2))
+
+    rbc_scatter.set_offsets(rbc_offsets)
+    plt_scatter.set_offsets(plt_offsets)
+    ax.set_title(f"Platelet Aggregation Model Animation - Step {frame}")
+
+    return rbc_scatter, plt_scatter, wall_scatter
+
+animation = FuncAnimation(fig, update, frames=range(0, n_steps, 5), interval=50, blit=False)
+save_path = os.path.join("figs", "Platelet_Aggregation_Animation.mp3")
+animation.save(save_path, writer="pillow", fps=20)
+print(f"Animation saved to {save_path}")
 plt.close()
