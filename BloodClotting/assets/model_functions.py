@@ -34,15 +34,7 @@ def make_rbc(radius, mass, position, velocity=None, fixed=False):
 #Function to create a platelet particle with the specified parameters
 def make_plt(radius, mass, position, velocity=None, activated=False, adhered=False):
     """Create one platelet particle."""
-    return make_particle(
-        "PLT",
-        radius,
-        mass,
-        position,
-        velocity,
-        activated=activated,
-        adhered=adhered,
-    )
+    return make_particle("PLT",radius,mass,position,velocity,activated=activated,adhered=adhered)
 
 #Function to create a list of RBC particles:
 def make_rbc_population(radius, mass, positions, velocity=None, fixed=False):
@@ -146,7 +138,7 @@ def drag_force(particle, viscosity, vessel_radius, max_velocity):
 
     return 6 * np.pi * viscosity * particle["radius"] * (u_fluid - v_particle) #Viscious drag force based on Stokes' law for a sphere in a fluid
 
-
+#Function to calculate the characteristic drag relaxation time for a particle in the plasma flow
 def drag_relaxation_time(particle, viscosity):
     """Characteristic drag relaxation time m / (6*pi*mu*r) for one particle."""
     return particle["mass"] / (6 * np.pi * viscosity * particle["radius"])
@@ -233,7 +225,7 @@ def platelet_pair_adhesion_force(particle, other_particle, adhesion_spring, adhe
     direction = displacement / distance
     return -adhesion_spring * (adhesion_cutoff - distance) * direction
 
-
+#Function to calculate the total adhesion force on a PLT from the damaged wall and other activated PLTs
 def adhesion_force(particle,moving_particles,damage_region,adhesion_spring,adhesion_cutoff,self_index):
     """Total adhesion force on a platelet from the damage region and other activated platelets."""
     total_force = wall_adhesion_force(particle,damage_region,adhesion_spring,adhesion_cutoff) #Adhesion force from the damaged wall
@@ -245,7 +237,7 @@ def adhesion_force(particle,moving_particles,damage_region,adhesion_spring,adhes
 
     return total_force #Total force = wall adhesion + platelet-platelet adhesion
 
-
+#Function to determine the target position on the wall where an activated PLT can bind based on current position
 def platelet_capture_target(particle, damage_region):
     """Return the wall-contact position where a platelet center can bind."""
     if particle["kind"] != "PLT":

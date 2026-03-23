@@ -14,14 +14,14 @@ plt_radius = 1.5 #microns
 plt_mass = 0.0124 #nanograms
 
 n_rbcs = 40 #number of RBCs to simulate
-n_plts = 40#number of platelets to simulate
+n_plts = 40 #number of platelets to simulate
 rng_seed = 42 #seed for reproducibility
 k_contact = 0.1 #contact spring stiffness, high k_contact means less overlap between particles,low k_contact means more overlap allowed.
 k_adhesion = 0.8 #adhesion spring stiffness for platelets <- adhest for sensitivity on PLTs adhesion strength
 
 #Time stepping for the drag-only simulation
 dt = 1e-8  #seconds
-n_steps = 10000 #number of simulation steps to run
+n_steps = 100 #number of simulation steps to run
 
 #Platelet template for later use once parameters are confirmed
 platelet = make_plt(plt_radius, plt_mass, [50.0, 0.0])
@@ -40,7 +40,7 @@ damage_region = {
     "contact_y": -(R - rbc_radius) + rbc_radius + plt_radius,
     "capture_distance": plt_radius,
 } #damage region on the wall where platelets can adhere
-adhesion_cutoff = 8 * plt_radius #distance within which platelets can adhere to the damaged wall
+adhesion_cutoff = 4 * plt_radius #distance within which platelets can adhere to the damaged wall
 
 #Initialize the random number generator and create the wall particles:
 rng = np.random.default_rng(rng_seed)
@@ -69,12 +69,8 @@ if n_plts > 0:
     #Seed one platelet near the damaged wall so the adhesion model is exercised.
     minimum_wall_clearance = rbc_radius + plt_radius + 0.5
     maximum_activation_distance = adhesion_cutoff - 0.5
-    if maximum_activation_distance <= minimum_wall_clearance:
-        raise ValueError(
-            "adhesion_cutoff is too small to place a non-overlapping platelet near the damaged region."
-        )
 
-    seeded_platelet_y = damage_region["contact_y"]
+    seeded_platelet_y = damage_region["contact_y"] 
 
     seeded_platelet_positions = [] #List to hold the position of the seeded platelet near the damaged region
 
@@ -86,9 +82,7 @@ if n_plts > 0:
 
     for x_position in candidate_x_positions:
         candidate_position = [x_position, seeded_platelet_y]
-        if not overlaps_existing_particles(
-            candidate_position, plt_radius, wall_particles + rbc_particles
-        ):
+        if not overlaps_existing_particles(candidate_position, plt_radius, wall_particles + rbc_particles):
             seeded_platelet_positions.append(candidate_position)
             break
 
@@ -195,13 +189,7 @@ fig, ax = plt.subplots(figsize=(8, 4))
 rbc_scatter = ax.scatter([], [], label="RBCs", color="red", s=30, marker="o")
 plt_scatter = ax.scatter([], [], label="PLTs", color="gold", s=15, marker="o")
 wall_scatter = ax.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", s=6)
-ax.plot(
-    [damage_region["x_min"], damage_region["x_max"]],
-    [damage_region["y"], damage_region["y"]],
-    color="orange",
-    linewidth=6,
-    label="Damage Region",
-)
+ax.plot([damage_region["x_min"], damage_region["x_max"]],[damage_region["y"], damage_region["y"]],color="orange",linewidth=6,label="Damage Region")
 ax.set_xlim(0, L)
 ax.set_ylim(-R, R)
 ax.set_xlabel("D (microns)")
