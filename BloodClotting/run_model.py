@@ -20,7 +20,7 @@ k_contact = 0.1 #contact spring stiffness, high k_contact means less overlap bet
 k_adhesion = 0.8 #adhesion spring stiffness for platelets <- adhest for sensitivity on PLTs adhesion strength
 
 #Time stepping for the drag-only simulation
-dt = 1e-8  #seconds
+dt = 10  #seconds
 n_steps = 1000 #number of simulation steps to run
 
 #Platelet template for later use once parameters are confirmed
@@ -230,7 +230,7 @@ def update(frame):
     return rbc_scatter, plt_scatter, wall_scatter
 
 animation = FuncAnimation(fig, update, frames=range(0, n_steps, 5), interval=50, blit=False)
-save_path = os.path.join("figs", "Platelet_Aggregation_Animation.mp3")
+save_path = os.path.join("figs", "Platelet_Aggregation_Animation.gif")
 animation.save(save_path, writer="pillow", fps=20)
 print(f"Animation saved to {save_path}")
 plt.close()
