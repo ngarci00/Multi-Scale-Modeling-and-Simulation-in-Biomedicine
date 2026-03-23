@@ -81,7 +81,8 @@ def sample_non_overlapping_positions(count,radius,x_bounds,y_bounds,rng,existing
 
         if overlaps:
             continue
-
+        
+        #For loop: Checking accepted overlap positions to avoid new overlapping
         for other_position in positions:
             min_distance = 2 * radius + padding
             if np.linalg.norm(candidate - other_position) < min_distance:

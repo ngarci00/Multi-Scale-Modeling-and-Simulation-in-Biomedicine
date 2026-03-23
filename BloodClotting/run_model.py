@@ -13,14 +13,14 @@ plt_radius = 1.5 #microns
 plt_mass = 0.0124 #nanograms
 
 n_rbcs = 40 #number of RBCs to simulate
-n_plts = 20#number of platelets to simulate
+n_plts = 40#number of platelets to simulate
 rng_seed = 42 #seed for reproducibility
 k_contact = 0.1 #contact spring stiffness, high k_contact means less overlap between particles,low k_contact means more overlap allowed.
 k_adhesion = 0.8 #adhesion spring stiffness for platelets <- adhest for sensitivity on PLTs adhesion strength
 
 #Time stepping for the drag-only simulation
-dt = 1e-6  #seconds
-n_steps = 100
+dt = 10  #seconds
+n_steps = 100 #number of simulation steps to run
 
 #Platelet template for later use once parameters are confirmed
 platelet = make_plt(plt_radius, plt_mass, [50.0, 0.0])
@@ -39,17 +39,77 @@ adhesion_cutoff = 8 * plt_radius #distance within which platelets can adhere to 
 rng = np.random.default_rng(rng_seed)
 wall_particles = make_wall_rbc_particles(L, R, rbc_radius, rbc_mass)
 
+#Function to check if a candidate particle would overlap with any existing particles
+#candidate particle is the new particle we want to place, other_particles is the list of existing particles we want to check against:
+def overlaps_existing_particles(candidate_position, candidate_radius, other_particles):
+    candidate_position = np.array(candidate_position, dtype=float)
+
+    for other_particle in other_particles:
+        min_distance = candidate_radius + other_particle["radius"]
+        if np.linalg.norm(candidate_position - other_particle["pos"]) < min_distance:
+            return True
+
+    return False
+
 #Random initial positions inside the vessel bounds:
 rbc_positions = sample_non_overlapping_positions(n_rbcs,rbc_radius,(rbc_radius, L - rbc_radius),(-R + rbc_radius, R - rbc_radius),rng,existing_particles=wall_particles)
 #Create the RBC particles based on the sampled positions:
 rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions)
 
 plt_particles = [] #Empty list to hold PLT particles
+
 if n_plts > 0:
-    if plt_radius is None or plt_mass is None:
-        raise ValueError("Set platelet radius and mass before simulating platelets.")
-    #This function ensures that the initial positions of the PLTs don't overlap with each other or with the wall and RBC particles:
-    plt_positions = sample_non_overlapping_positions(n_plts,plt_radius,(plt_radius, L - plt_radius),(-R + plt_radius, R - plt_radius),rng,existing_particles=wall_particles + rbc_particles)
+    #Seed one platelet near the damaged wall so the adhesion model is exercised.
+    minimum_wall_clearance = rbc_radius + plt_radius + 0.5
+    maximum_activation_distance = adhesion_cutoff - 0.5
+    if maximum_activation_distance <= minimum_wall_clearance:
+        raise ValueError(
+            "adhesion_cutoff is too small to place a non-overlapping platelet near the damaged region."
+        )
+
+    seeded_platelet_y = damage_region["y"] + 0.5 * (
+        minimum_wall_clearance + maximum_activation_distance
+    )
+
+    seeded_platelet_positions = [] #List to hold the position of the seeded platelet near the damaged region
+
+    candidate_x_positions = np.linspace(
+        damage_region["x_min"] + plt_radius,
+        damage_region["x_max"] - plt_radius,
+        41,
+    )
+
+    for x_position in candidate_x_positions:
+        candidate_position = [x_position, seeded_platelet_y]
+        if not overlaps_existing_particles(
+            candidate_position, plt_radius, wall_particles + rbc_particles
+        ):
+            seeded_platelet_positions.append(candidate_position)
+            break
+
+    if not seeded_platelet_positions:
+        raise ValueError(
+            "Could not place a platelet near the damaged region without overlap."
+        )
+
+    #This function ensures that the remaining PLTs don't overlap with each other,
+    #the wall particles, the RBCs, or the seeded near-damage platelet.
+    plt_positions = list(seeded_platelet_positions)
+    remaining_plts = n_plts - len(seeded_platelet_positions)
+    if remaining_plts > 0:
+        plt_positions.extend(
+            sample_non_overlapping_positions(
+                remaining_plts,
+                plt_radius,
+                (plt_radius, L - plt_radius),
+                (-R + plt_radius, R - plt_radius),
+                rng,
+                existing_particles=wall_particles
+                + rbc_particles
+                + make_plt_population(plt_radius, plt_mass, seeded_platelet_positions),
+            )
+        )
+
     plt_particles = make_plt_population(plt_radius, plt_mass, plt_positions)
 
 #Combining RBC and PLT particles into a single list for the simulation:
@@ -107,7 +167,7 @@ for particle, history in zip(particles, position_history):
         plotted_labels.add(label)
 
     plt.plot(history[:, 0],history[:, 1],label=label,color=color,marker="o",markersize=marker_size)
-wall_positions = np.array([particle["pos"] for particle in wall_particles])
+wall_positions = np.array([particle["pos"] for particle in wall_particles]) #Plot the wall particles as a reference for the vessel walls
 plt.scatter(wall_positions[:, 0],wall_positions[:, 1],label="Wall RBCs",color="firebrick",marker="o",s=6)
 plt.plot([damage_region["x_min"], damage_region["x_max"]],[damage_region["y"], damage_region["y"]],color="orange",linewidth=6,label="Damage Region")
 plt.xlabel("D (microns)")
