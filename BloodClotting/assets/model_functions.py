@@ -1,7 +1,16 @@
 import numpy as np
 
 #Function to create a generic particle dictionary with the specified parameters
-def make_particle(kind, radius, mass, position, velocity=None, activated=False, fixed=False):
+def make_particle(
+    kind,
+    radius,
+    mass,
+    position,
+    velocity=None,
+    activated=False,
+    fixed=False,
+    adhered=False,
+):
     """Create a particle dictionary with NumPy position and velocity vectors."""
     if velocity is None:
         velocity = [0.0, 0.0]
@@ -14,6 +23,7 @@ def make_particle(kind, radius, mass, position, velocity=None, activated=False, 
         "vel": np.array(velocity, dtype=float),
         "activated": activated,
         "fixed": fixed,
+        "adhered": adhered,
     }
 
 #Function to create an RBC particle with the specified parameters
@@ -22,9 +32,17 @@ def make_rbc(radius, mass, position, velocity=None, fixed=False):
     return make_particle("RBC", radius, mass, position, velocity, fixed=fixed)
 
 #Function to create a platelet particle with the specified parameters
-def make_plt(radius, mass, position, velocity=None, activated=False):
+def make_plt(radius, mass, position, velocity=None, activated=False, adhered=False):
     """Create one platelet particle."""
-    return make_particle("PLT", radius, mass, position, velocity, activated)
+    return make_particle(
+        "PLT",
+        radius,
+        mass,
+        position,
+        velocity,
+        activated=activated,
+        adhered=adhered,
+    )
 
 #Function to create a list of RBC particles:
 def make_rbc_population(radius, mass, positions, velocity=None, fixed=False):
@@ -32,9 +50,12 @@ def make_rbc_population(radius, mass, positions, velocity=None, fixed=False):
     return [make_rbc(radius, mass, position, velocity, fixed) for position in positions]
 
 #Function to create a list of platelet particles:
-def make_plt_population(radius, mass, positions, velocity=None, activated=False):
+def make_plt_population(radius, mass, positions, velocity=None, activated=False, adhered=False):
     """Create a list of platelet particles from an iterable of positions."""
-    return [make_plt(radius, mass, position, velocity, activated) for position in positions]
+    return [
+        make_plt(radius, mass, position, velocity, activated, adhered)
+        for position in positions
+    ]
 
 #Function to sample random positions within the specified bounds:
 def sample_random_positions(count, x_bounds, y_bounds, rng):
@@ -167,7 +188,8 @@ def contact_force(particle, moving_particles, fixed_particles, spring_constant, 
 def nearest_damage_point(position, damage_region):
     """Return the closest point on the damaged wall segment to a particle position."""
     x_coord = np.clip(position[0], damage_region["x_min"], damage_region["x_max"])
-    return np.array([x_coord, damage_region["y"]], dtype=float)
+    y_coord = damage_region.get("contact_y", damage_region["y"])
+    return np.array([x_coord, y_coord], dtype=float)
 
 #Function to check if a platelet is within the adhesion cutoff distance of the damaged region:
 def platelet_in_damage_zone(particle, damage_region, adhesion_cutoff):
@@ -181,7 +203,7 @@ def platelet_in_damage_zone(particle, damage_region, adhesion_cutoff):
 #Function to calculate the adhesion force on an activated PLTs from the damaged wall and other PLTs:
 def wall_adhesion_force(particle, damage_region, adhesion_spring, adhesion_cutoff):
     """Attractive force pulling an activated platelet toward the damage region."""
-    if particle["kind"] != "PLT" or not particle["activated"]:
+    if particle["kind"] != "PLT" or not particle["activated"] or particle["adhered"]:
         return np.zeros(2)
 
     target = nearest_damage_point(particle["pos"], damage_region)
@@ -222,6 +244,23 @@ def adhesion_force(particle,moving_particles,damage_region,adhesion_spring,adhes
         total_force += platelet_pair_adhesion_force(particle,other_particle,adhesion_spring,adhesion_cutoff) #Adhesion force from other activated platelets
 
     return total_force #Total force = wall adhesion + platelet-platelet adhesion
+
+
+def platelet_capture_target(particle, damage_region):
+    """Return the wall-contact position where a platelet center can bind."""
+    if particle["kind"] != "PLT":
+        return None
+    return nearest_damage_point(particle["pos"], damage_region)
+
+
+def platelet_can_bind(particle, damage_region):
+    """Return True when an activated platelet is close enough to become fixed to the wall."""
+    if particle["kind"] != "PLT" or not particle["activated"] or particle["adhered"]:
+        return False
+
+    capture_distance = damage_region.get("capture_distance", particle["radius"])
+    target = platelet_capture_target(particle, damage_region)
+    return np.linalg.norm(particle["pos"] - target) <= capture_distance
 
 #Function to update a single particle's velocity and position based on drag force only 
 def update_my_particle_drag(particle, dt, viscosity, vessel_radius, max_velocity):
@@ -275,8 +314,27 @@ def update_particles_with_adhesion(particles,fixed_particles,dt,viscosity,vessel
             snapshot["activated"] = True
             particles[index]["activated"] = True
 
+    #Capture activated platelets once they reach the wall-contact target.
+    for index, snapshot in enumerate(particle_snapshots):
+        if platelet_can_bind(snapshot, damage_region):
+            target = platelet_capture_target(snapshot, damage_region)
+            if target is not None:
+                snapshot["adhered"] = True
+                snapshot["pos"] = target.copy()
+                snapshot["vel"] = np.zeros(2)
+
+                particles[index]["activated"] = True
+                particles[index]["adhered"] = True
+                particles[index]["pos"] = target.copy()
+                particles[index]["vel"] = np.zeros(2)
+
     #Calculate forces and update each particle based on the snapshot 
     for index, snapshot in enumerate(particle_snapshots):
+        if snapshot["fixed"] or snapshot["adhered"]:
+            particles[index]["vel"] = np.zeros(2)
+            particles[index]["pos"] = snapshot["pos"].copy()
+            continue
+
         drag = drag_force(snapshot, viscosity, vessel_radius, max_velocity)
         contact = contact_force(snapshot,particle_snapshots,fixed_particles,contact_spring,index)
         adhesion = adhesion_force(snapshot,particle_snapshots,damage_region,adhesion_spring,adhesion_cutoff,index,)

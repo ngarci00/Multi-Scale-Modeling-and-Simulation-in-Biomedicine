@@ -19,8 +19,8 @@ k_contact = 0.1 #contact spring stiffness, high k_contact means less overlap bet
 k_adhesion = 0.8 #adhesion spring stiffness for platelets <- adhest for sensitivity on PLTs adhesion strength
 
 #Time stepping for the drag-only simulation
-dt = 10  #seconds
-n_steps = 100 #number of simulation steps to run
+dt = 1e-8  #seconds
+n_steps = 1000 #number of simulation steps to run
 
 #Platelet template for later use once parameters are confirmed
 platelet = make_plt(plt_radius, plt_mass, [50.0, 0.0])
@@ -32,7 +32,13 @@ D = 100 #diameter of the vessel in microns
 R = D / 2 #radius of the vessel in microns
 mu = 0.012 * 1e5  #plasma viscosity in dyne/cm*s to ng/microns*s
 V_max = 1.0 * 1000 #maximum plasma velocity in microns/s (converted from mm/s)
-damage_region = {"x_min": 0.45 * L,"x_max": 0.55 * L,"y": -(R - rbc_radius),} #damage region on the wall where platelets can adhere
+damage_region = {
+    "x_min": 0.45 * L,
+    "x_max": 0.55 * L,
+    "y": -(R - rbc_radius),
+    "contact_y": -(R - rbc_radius) + rbc_radius + plt_radius,
+    "capture_distance": plt_radius,
+} #damage region on the wall where platelets can adhere
 adhesion_cutoff = 8 * plt_radius #distance within which platelets can adhere to the damaged wall
 
 #Initialize the random number generator and create the wall particles:
@@ -67,9 +73,7 @@ if n_plts > 0:
             "adhesion_cutoff is too small to place a non-overlapping platelet near the damaged region."
         )
 
-    seeded_platelet_y = damage_region["y"] + 0.5 * (
-        minimum_wall_clearance + maximum_activation_distance
-    )
+    seeded_platelet_y = damage_region["contact_y"]
 
     seeded_platelet_positions = [] #List to hold the position of the seeded platelet near the damaged region
 
@@ -138,14 +142,19 @@ for step in range(n_steps):
         activated_platelets = sum(
             1 for particle in particles if particle["kind"] == "PLT" and particle["activated"]
         )
+        adhered_platelets = sum(
+            1 for particle in particles if particle["kind"] == "PLT" and particle["adhered"]
+        )
         print(f"Step {step}:")
         for index, particle in enumerate(particles):
             print(
                 f"  {particle['kind']} {index}: position = {particle['pos']}, "
                 f"velocity = {particle['vel']}, "
-                f"activated = {particle['activated']}"
+                f"activated = {particle['activated']}, "
+                f"adhered = {particle['adhered']}"
             )
         print(f"  Activated platelets: {activated_platelets}") #Print the number of activated platelets at this step
+        print(f"  Adhered platelets: {adhered_platelets}")
 
 #Plotting the trajectories of the RBCs
 plt.figure(figsize=(8, 4))
