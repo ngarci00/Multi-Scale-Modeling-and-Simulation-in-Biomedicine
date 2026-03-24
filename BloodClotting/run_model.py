@@ -57,7 +57,7 @@ lower_bound_RBC = -R + rbc_radius
 rbc_positions = sample_non_overlapping_positions(n_rbcs,rbc_radius,(rbc_radius, L - rbc_radius),(lower_bound_RBC, upper_bound_RBC),rng,existing_particles=wall_particles,)
 rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions, velocity=[10.0, 0.0])
 
-# Random initial platelet positions inside the vessel bounds
+#Random initial platelet positions inside the vessel bounds
 plt_particles = []
 if n_plts > 0:
     plt_positions = sample_non_overlapping_positions(n_plts,plt_radius,(plt_radius, L - plt_radius),(lower_bound_RBC, upper_bound_RBC),
@@ -66,7 +66,7 @@ if n_plts > 0:
     )
     plt_particles = make_plt_population(plt_radius, plt_mass, plt_positions)
 
-# Combine RBC and PLT particles into a single list for the simulation
+#Combine RBC and PLT particles into a single list for the simulation
 particles = rbc_particles + plt_particles
 
 # Use a timestep smaller than the fastest drag relaxation timescale
@@ -151,6 +151,7 @@ ax.legend()
 
 visual_scale = 1000  #Scale factor to make movement more visible in the animation
 
+#Function to update the positions of the particles in the animation at each frame:
 def update(frame):
     #lists to hold the current positions of RBCs and PLTs for the animation:
     rbc_positions = []
