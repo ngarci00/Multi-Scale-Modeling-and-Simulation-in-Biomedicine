@@ -111,6 +111,7 @@ for particle, history in zip(particles, position_history):
     else:
         plotted_labels.add(label)
 
+    #Plotting the trajectory of each particle with markers at each time step:
     plt.plot(history[:, 0], history[:, 1], label=label, color=color, marker="o", markersize=marker_size)
 
 wall_positions = np.array([particle["pos"] for particle in wall_particles])
