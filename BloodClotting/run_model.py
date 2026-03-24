@@ -202,6 +202,9 @@ def update(frame):
     rbc_positions = []
     plt_positions = []
     visual_scale = 1000
+    
+    ax.set_xlim(damage_region["x_min"] - 40, damage_region["x_max"] + 40)
+    ax.set_ylim(damage_region["y"] - 20, damage_region["y"] + 20)
 
     for particle, history in zip(particles, position_history):
         start = history[0]
