@@ -51,19 +51,16 @@ rng = np.random.default_rng(rng_seed)
 wall_particles = make_wall_rbc_particles(L, R, rbc_radius, rbc_mass)
 
 #Random initial RBC positions inside the vessel bounds
-upper_bound = R - rbc_radius
-lower_bound = -R + rbc_radius
-rbc_positions = sample_non_overlapping_positions(n_rbcs,rbc_radius,(rbc_radius, L - rbc_radius),(lower_bound, upper_bound),rng,existing_particles=wall_particles,)
+upper_bound_RBC = R - rbc_radius
+lower_bound_RBC = -R + rbc_radius
+
+rbc_positions = sample_non_overlapping_positions(n_rbcs,rbc_radius,(rbc_radius, L - rbc_radius),(lower_bound_RBC, upper_bound_RBC),rng,existing_particles=wall_particles,)
 rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions, velocity=[10.0, 0.0])
 
 # Random initial platelet positions inside the vessel bounds
 plt_particles = []
 if n_plts > 0:
-    plt_positions = sample_non_overlapping_positions(
-        n_plts,
-        plt_radius,
-        (plt_radius, L - plt_radius),
-        (lower_bound, upper_bound),
+    plt_positions = sample_non_overlapping_positions(n_plts,plt_radius,(plt_radius, L - plt_radius),(lower_bound_RBC, upper_bound_RBC),
         rng,
         existing_particles=wall_particles + rbc_particles,
     )
