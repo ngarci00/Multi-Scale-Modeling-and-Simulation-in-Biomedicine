@@ -12,32 +12,30 @@ from assets.model_functions import (
     make_plt_population,
     make_rbc_population,
     make_wall_rbc_particles,
-    sample_non_overlapping_positions,
     update_particles_with_contact,
 )
 
-# Parameters for the RBCs and PLTs
-rbc_radius = 8.0  # microns
-rbc_mass = 1.1  # nanograms
-plt_radius = 1.5  # microns
-plt_mass = 0.0124  # nanograms
+#Parameters for the RBCs and PLTs
+rbc_radius = 8.0  #microns
+rbc_mass = 1.1  #nanograms
+plt_radius = 1.5  #microns
+plt_mass = 0.0124  #nanograms
 
-n_rbcs = 40  # number of RBCs to simulate
-n_plts = 30  # number of platelets to simulate
-rng_seed = 42  # seed for reproducibility
-k_contact = 0.1  # repulsive contact spring stiffness
+n_rbcs = 40  #number of RBCs to simulate
+n_plts = 30  #number of platelets to simulate
+rng_seed = 42  #seed for reproducibility
+k_contact = 0.1  #repulsive contact spring stiffness
 
 # Time stepping for the simulation
-dt = 1e-6  # time step in seconds
-n_steps = 1000  # number of simulation steps to run
+dt = 1e-6  #time step in seconds
+n_steps = 10000  #number of simulation steps to run
 
 # Vessel and flow parameters
-L = 400  # length of the vessel in microns
-D = 100  # diameter of the vessel in microns
-R = D / 2  # radius of the vessel in microns
-mu = 0.012 * 1e5  # plasma viscosity in ng / (micron * s)
-V_max = 1.0 * 1000  # maximum plasma velocity in microns / s
-
+L = 400  #length of the vessel in microns
+D = 100  #diameter of the vessel in microns
+R = D / 2  #radius of the vessel in microns
+mu = 0.012 * 1e5  #plasma viscosity in ng / (micron * s)
+V_max = 1.0 * 1000  #maximum plasma velocity in microns / s
 #Random damage region position generato between the bounds of the vessel:
 random_region= np.random.default_rng(rng_seed).uniform(0.45, 0.55) * L
 damage_region = {
@@ -54,28 +52,31 @@ wall_particles = make_wall_rbc_particles(L, R, rbc_radius, rbc_mass)
 upper_bound_RBC = R - rbc_radius
 lower_bound_RBC = -R + rbc_radius
 
-rbc_positions = sample_non_overlapping_positions(n_rbcs,rbc_radius,(rbc_radius, L - rbc_radius),(lower_bound_RBC, upper_bound_RBC),rng,existing_particles=wall_particles,)
-rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions, velocity=[10.0, 0.0])
+rbc_positions = [
+    [rbc_radius, rng.uniform(lower_bound_RBC, upper_bound_RBC)]
+    for _ in range(n_rbcs)
+]
+rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions, velocity=[0.0, 0.0])
 
 #Random initial platelet positions inside the vessel bounds
 plt_particles = []
 if n_plts > 0:
-    plt_positions = sample_non_overlapping_positions(n_plts,plt_radius,(plt_radius, L - plt_radius),(lower_bound_RBC, upper_bound_RBC),
-        rng,
-        existing_particles=wall_particles + rbc_particles,
-    )
+    plt_positions = [
+        [plt_radius, rng.uniform(-R + plt_radius, R - plt_radius)]
+        for _ in range(n_plts)
+    ]
     plt_particles = make_plt_population(plt_radius, plt_mass, plt_positions)
 
 #Combine RBC and PLT particles into a single list for the simulation
 particles = rbc_particles + plt_particles
 
-# Use a timestep smaller than the fastest drag relaxation timescale
+#Use a timestep smaller than the fastest drag relaxation timescale
 if particles:
     min_relaxation_time = min(drag_relaxation_time(particle, mu) for particle in particles)
     dt = min(dt, 0.05 * min_relaxation_time)
     print(f"Using dt = {dt:.3e} s")
 
-# Run the simulation and store particle position history
+#Run the simulation and store particle position history
 position_history = [[] for _ in particles]
 for step in range(n_steps):
     update_particles_with_contact(particles, wall_particles, dt, mu, R, V_max, k_contact)
@@ -83,7 +84,7 @@ for step in range(n_steps):
     for index, particle in enumerate(particles):
         position_history[index].append(particle["pos"].copy())
 
-    if step % 100 == 0:
+    if step % 1000 == 0:
         print(f"Step {step}:")
         for index, particle in enumerate(particles):
             print(f"  {particle['kind']} {index}: position = {particle['pos']}, " f"velocity = {particle['vel']}")
@@ -173,7 +174,6 @@ def update(frame):
     ax.set_title(f"Blood Cell Animation - Step {frame}")
 
     return rbc_scatter, plt_scatter, wall_scatter
-
 
 animation = FuncAnimation(fig, update, frames=range(0, n_steps, 10), interval=50, blit=False)
 save_path = os.path.join("figs", "Blood_Cell_Animation.gif")
