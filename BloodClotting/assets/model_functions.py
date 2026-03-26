@@ -2,7 +2,7 @@
 #This script serves as a collection of all the used functions needed in the main script to run the model:
 import numpy as np
 
-# Function to create a generic particle dictionary with the specified parameters
+#Function to create a generic particle dictionary with the specified parameters
 def make_particle(kind, radius, mass, position, velocity=None, fixed=False):
     if velocity is None:
         velocity = [0.0, 0.0]
@@ -106,10 +106,6 @@ def drag_force(particle, viscosity, vessel_radius, max_velocity):
     v_particle = particle["vel"]
 
     return 6 * np.pi * viscosity * particle["radius"] * (u_fluid - v_particle)
-
-#Function to calculate the characteristic drag relaxation time for a particle
-def drag_relaxation_time(particle, viscosity):
-    return particle["mass"] / (6 * np.pi * viscosity * particle["radius"])
 
 #Function to calculate the pairwise contact force between two particles
 def pairwise_contact_force(particle, other_particle, spring_constant):
