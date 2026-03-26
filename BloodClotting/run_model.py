@@ -27,7 +27,7 @@ k_contact = 0.1  #repulsive contact spring stiffness
 
 # Time stepping for the simulation
 dt = 1e-8  #time step in seconds
-n_steps = 5000  #number of simulation steps to run
+n_steps = 4000  #number of simulation steps to run
 
 # Vessel and flow parameters
 L = 400  #length of the vessel in microns
@@ -49,9 +49,14 @@ damage_region = {
 rng = np.random.default_rng(rng_seed)
 wall_particles = make_wall_rbc_particles(L, R, rbc_radius, rbc_mass)
 
-#Random initial RBC positions inside the vessel bounds
-upper_bound_RBC = R - rbc_radius
-lower_bound_RBC = -R + rbc_radius
+# Random initial particle positions inside the wall-particle boundaries.
+# The wall particle centers sit at y = +/- (R - rbc_radius), so moving particle
+# centers need additional clearance by their own radius plus the wall RBC radius.
+wall_center_y = R - rbc_radius
+upper_bound_RBC = wall_center_y - (rbc_radius + rbc_radius)
+lower_bound_RBC = -upper_bound_RBC
+upper_bound_PLT = wall_center_y - (rbc_radius + plt_radius)
+lower_bound_PLT = -upper_bound_PLT
 
 rbc_positions = [
     [
@@ -68,7 +73,7 @@ if n_plts > 0:
     plt_positions = [
         [
             rng.uniform(plt_radius, inlet_width - plt_radius),
-            rng.uniform(-R + plt_radius, R - plt_radius),
+            rng.uniform(lower_bound_PLT, upper_bound_PLT),
         ]
         for _ in range(n_plts)
     ]
