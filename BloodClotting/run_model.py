@@ -150,7 +150,7 @@ ax.set_ylabel("L (microns)")
 ax.set_title("Blood Cell Animation")
 ax.legend()
 
-visual_scale = 1000  #Scale factor to make movement more visible in the animation
+visual_scale = 10000  #Scale factor to make movement more visible in the animation
 
 #Function to update the positions of the particles in the animation at each frame:
 def update(frame):
