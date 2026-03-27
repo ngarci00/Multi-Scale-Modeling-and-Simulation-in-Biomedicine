@@ -11,19 +11,25 @@ from assets.model_functions import (
     make_plt_population,
     make_rbc_population,
     make_wall_rbc_particles,
-    update_particles_with_contact,
+    update_particles_with_activation_and_adhesion,
 )
 
-#Parameters for the RBCs and PLTs
-rbc_radius = 8.0  #microns
-rbc_mass = 1.1  #nanograms
-plt_radius = 1.5  #microns
-plt_mass = 0.0124  #nanograms
+# Parameters for the RBCs and PLTs
+rbc_radius = 8.0  # microns
+rbc_mass = 1.1  # nanograms
+plt_radius = 1.5  # microns
+plt_mass = 0.0124  # nanograms
 
 n_rbcs = 40  #number of RBCs to simulate
 n_plts = 30  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
 k_contact = 0.1  #repulsive contact spring stiffness
+
+#Platelet activation and adhesion parameters
+threshold = 30.0  #activation threshold distance in microns
+activation_time_required = 5e-7  #seconds
+adhesion_cutoff = 8.0  #adhesion cutoff distance in microns
+k_adhesion = 1.0  #adhesion spring strength
 
 # Time stepping for the simulation
 dt = 1e-8  #time step in seconds
@@ -31,27 +37,26 @@ n_steps = 4000  #number of simulation steps to run
 
 # Vessel and flow parameters
 L = 400  #length of the vessel in microns
-D = 100  #diameter of the vessel in microns
+D = 100  # iameter of the vessel in microns
 R = D / 2  #radius of the vessel in microns
 mu = 0.012 * 1e5  #plasma viscosity in ng / (micron * s)
 V_max = 1.0 * 1000  #maximum plasma velocity in microns / s
-inlet_width = 20.0  #width of the left-side inlet band in microns, this is where the RBCs and PLTs will be initialized to enter the vessel from the left side
+inlet_width = 20.0  #width of the left-side inlet band in microns
 
-#Random damage region position generato between the bounds of the vessel:
-random_region= np.random.default_rng(rng_seed).uniform(0.45, 0.55) * L
+# Random damage region position between the bounds of the vessel
+random_region = np.random.default_rng(rng_seed).uniform(0.45, 0.55) * L
 damage_region = {
     "x_min": random_region - 0.05 * L,
     "x_max": random_region + 0.05 * L,
     "y": -(R - rbc_radius),
+    "contact_y": -(R - rbc_radius) + rbc_radius + plt_radius,
 }
 
-#Initialize the random number generator and create the wall particles
+# Initialize the random number generator and create the wall particles
 rng = np.random.default_rng(rng_seed)
 wall_particles = make_wall_rbc_particles(L, R, rbc_radius, rbc_mass)
 
-# Random initial particle positions inside the wall-particle boundaries.
-# The wall particle centers sit at y = +/- (R - rbc_radius), so moving particle
-# centers need additional clearance by their own radius plus the wall RBC radius.
+# Random initial particle positions inside the wall-particle boundaries
 wall_center_y = R - rbc_radius
 upper_bound_RBC = wall_center_y - (rbc_radius + rbc_radius)
 lower_bound_RBC = -upper_bound_RBC
@@ -67,7 +72,6 @@ rbc_positions = [
 ]
 rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions, velocity=[0.0, 0.0])
 
-#Random initial platelet positions inside the vessel bounds
 plt_particles = []
 if n_plts > 0:
     plt_positions = [
@@ -79,45 +83,63 @@ if n_plts > 0:
     ]
     plt_particles = make_plt_population(plt_radius, plt_mass, plt_positions)
 
-#Combine RBC and PLT particles into a single list for the simulation
+# Combine RBC and PLT particles into a single list for the simulation
 particles = rbc_particles + plt_particles
 
 print(f"Using dt = {dt:.3e} s")
 
-#Run the simulation and store particle position history
+# Run the simulation and store particle state history
 position_history = [[] for _ in particles]
+activation_history = [[] for _ in particles]
 for step in range(n_steps):
-    update_particles_with_contact(particles, wall_particles, dt, mu, R, V_max, k_contact)
+    update_particles_with_activation_and_adhesion(
+        particles,
+        wall_particles,
+        dt,
+        mu,
+        R,
+        V_max,
+        k_contact,
+        damage_region,
+        threshold,
+        activation_time_required,
+        adhesion_cutoff,
+        k_adhesion,
+    )
 
     for index, particle in enumerate(particles):
         position_history[index].append(particle["pos"].copy())
+        activation_history[index].append(particle["activated"])
 
     if step % 100 == 0:
-        print(f"Step {step}:")
-        for index, particle in enumerate(particles):
-            print(f"  {particle['kind']} {index}: position = {particle['pos']}, " f"velocity = {particle['vel']}")
+        activated_platelets = sum(
+            1 for particle in particles if particle["kind"] == "PLT" and particle["activated"]
+        )
+        print(f"Step {step}: activated platelets = {activated_platelets}")
 
-#Plot particle trajectories
+# Plot particle trajectories
 plt.figure(figsize=(8, 4))
 plotted_labels = set()
-#For loop to plot the trajectories of RBCs and PLTs:
 for particle, history in zip(particles, position_history):
     history = np.array(history)
     if particle["kind"] == "RBC":
         color = "red"
         marker_size = 8
         label = "RBCs"
+    elif particle["activated"]:
+        color = "lime"
+        marker_size = 5
+        label = "Activated PLTs"
     else:
         color = "gold"
         marker_size = 5
-        label = "PLTs"
+        label = "Inactive PLTs"
 
     if label in plotted_labels:
         label = None
     else:
         plotted_labels.add(label)
 
-    #Plotting the trajectory of each particle with markers at each time step:
     plt.plot(history[:, 0], history[:, 1], label=label, color=color, marker="o", markersize=marker_size)
 
 wall_positions = np.array([particle["pos"] for particle in wall_particles])
@@ -139,10 +161,11 @@ os.makedirs("figs", exist_ok=True)
 plt.savefig(os.path.join("figs", "RBC_Trajectories.png"), dpi=300, bbox_inches="tight")
 plt.close()
 
-#Adding the animation using matplotlib's FuncAnimation
+# Add the animation using matplotlib's FuncAnimation
 fig, ax = plt.subplots(figsize=(8, 4))
 rbc_scatter = ax.scatter([], [], label="RBCs", color="red", s=30, marker="o")
-plt_scatter = ax.scatter([], [], label="PLTs", color="gold", s=15, marker="o")
+inactive_plt_scatter = ax.scatter([], [], label="Inactive PLTs", color="gold", s=15, marker="o")
+activated_plt_scatter = ax.scatter([], [], label="Activated PLTs", color="lime", s=15, marker="o")
 wall_scatter = ax.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", s=6)
 ax.plot(
     [damage_region["x_min"], damage_region["x_max"]],
@@ -158,30 +181,36 @@ ax.set_ylabel("L (microns)")
 ax.set_title("Blood Cell Animation")
 ax.legend()
 
-visual_scale = 10000  #Scale factor to make movement more visible in the animation
+visual_scale = 10000  # Scale factor to make movement more visible in the animation
 
-#Function to update the positions of the particles in the animation at each frame:
+
+# Function to update the positions of the particles in the animation at each frame
 def update(frame):
-    #lists to hold the current positions of RBCs and PLTs for the animation:
     rbc_positions = []
-    plt_positions = []
+    inactive_plt_positions = []
+    activated_plt_positions = []
 
-    for particle, history in zip(particles, position_history):
+    for index, (particle, history) in enumerate(zip(particles, position_history)):
         start = history[0]
         pos = start + visual_scale * (history[frame] - start)
         if particle["kind"] == "RBC":
             rbc_positions.append(pos)
+        elif activation_history[index][frame]:
+            activated_plt_positions.append(pos)
         else:
-            plt_positions.append(pos)
+            inactive_plt_positions.append(pos)
 
     rbc_offsets = np.array(rbc_positions) if rbc_positions else np.empty((0, 2))
-    plt_offsets = np.array(plt_positions) if plt_positions else np.empty((0, 2))
+    inactive_plt_offsets = np.array(inactive_plt_positions) if inactive_plt_positions else np.empty((0, 2))
+    activated_plt_offsets = np.array(activated_plt_positions) if activated_plt_positions else np.empty((0, 2))
 
     rbc_scatter.set_offsets(rbc_offsets)
-    plt_scatter.set_offsets(plt_offsets)
+    inactive_plt_scatter.set_offsets(inactive_plt_offsets)
+    activated_plt_scatter.set_offsets(activated_plt_offsets)
     ax.set_title(f"Blood Cell Animation - Step {frame}")
 
-    return rbc_scatter, plt_scatter, wall_scatter
+    return rbc_scatter, inactive_plt_scatter, activated_plt_scatter, wall_scatter
+
 
 animation = FuncAnimation(fig, update, frames=range(0, n_steps, 10), interval=50, blit=False)
 save_path = os.path.join("figs", "Blood_Cell_Animation.gif")
