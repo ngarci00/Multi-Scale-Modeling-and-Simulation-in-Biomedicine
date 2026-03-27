@@ -26,14 +26,14 @@ rng_seed = 42  #seed for reproducibility
 k_contact = 0.1  #repulsive contact spring stiffness
 
 #Platelet activation and adhesion parameters
-threshold = 30.0  #activation threshold distance in microns
+threshold = 16.0  #activation threshold distance in microns
 activation_time_required = 5e-7  #seconds
 adhesion_cutoff = 8.0  #adhesion cutoff distance in microns
 k_adhesion = 1.0  #adhesion spring strength
 
 # Time stepping for the simulation
 dt = 1e-8  #time step in seconds
-n_steps = 4000  #number of simulation steps to run
+n_steps = 2000  #number of simulation steps to run
 
 # Vessel and flow parameters
 L = 400  #length of the vessel in microns
@@ -43,11 +43,12 @@ mu = 0.012 * 1e5  #plasma viscosity in ng / (micron * s)
 V_max = 1.0 * 1000  #maximum plasma velocity in microns / s
 inlet_width = 20.0  #width of the left-side inlet band in microns
 
-# Random damage region position between the bounds of the vessel
-random_region = np.random.default_rng(rng_seed).uniform(0.45, 0.55) * L
+# Place the damaged region near the inlet so platelet activation is testable
+# without requiring an extremely long simulation time.
+damage_center_x = 100.0
 damage_region = {
-    "x_min": random_region - 0.05 * L,
-    "x_max": random_region + 0.05 * L,
+    "x_min": damage_center_x - 10.0,
+    "x_max": damage_center_x + 10.0,
     "y": -(R - rbc_radius),
     "contact_y": -(R - rbc_radius) + rbc_radius + plt_radius,
 }
