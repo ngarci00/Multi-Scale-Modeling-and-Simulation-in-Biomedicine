@@ -23,17 +23,17 @@ plt_mass = 0.0124  # nanograms
 n_rbcs = 50  #number of RBCs to simulate
 n_plts = 40  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
-k_contact = 0.1  #repulsive contact spring stiffness
+k_contact = 50  #repulsive contact spring stiffness
 
 #Platelet activation and adhesion parameters
-threshold = 20 #activation threshold distance in microns
-activation_time_required = 5e-7  #seconds
-adhesion_cutoff = 24  #adhesion cutoff distance in microns
-k_adhesion = 10000 #adhesion spring strength
+threshold = 28 #activation threshold distance in microns
+activation_time_required = 1e-6  #seconds
+adhesion_cutoff = 50  #adhesion cutoff distance in microns
+k_adhesion = 1.5e5 #adhesion spring strength
 
 # Time stepping for the simulation
-dt = 1e-8  #time step in seconds
-n_steps = 1000  #number of simulation steps to run
+dt = 1e-9  #time step in seconds
+n_steps = 2000  #number of simulation steps to run
 
 #Vessel and flow parameters
 L = 400  #length of the vessel in microns
@@ -182,23 +182,26 @@ ax.set_ylabel("L (microns)")
 ax.set_title("Blood Cell Animation")
 ax.legend()
 
-visual_scale = 10000  # Scale factor to make movement more visible in the animation
+visual_scale = 10000  # Show the true simulated motion in the animation
 
-
-# Function to update the positions of the particles in the animation at each frame
+#Function to update the positions of the particles in the animation at each frame
 def update(frame):
     rbc_positions = []
     inactive_plt_positions = []
     activated_plt_positions = []
 
     for index, (particle, history) in enumerate(zip(particles, position_history)):
-        start = history[0]
-        pos = start + visual_scale * (history[frame] - start)
         if particle["kind"] == "RBC":
+            start = history[0]
+            pos = start + visual_scale * (history[frame] - start)
             rbc_positions.append(pos)
         elif activation_history[index][frame]:
+            start = history[0]
+            pos = start + visual_scale * (history[frame] - start)
             activated_plt_positions.append(pos)
         else:
+            start = history[0]
+            pos = start + visual_scale * (history[frame] - start)
             inactive_plt_positions.append(pos)
 
     rbc_offsets = np.array(rbc_positions) if rbc_positions else np.empty((0, 2))

@@ -27,6 +27,7 @@ def make_particle(
         "fixed": fixed,
         "activated": activated,
         "activation_time": activation_time,
+        "adhered": False,
     }
 
 
@@ -152,24 +153,6 @@ def is_near_damage_region(particle, damage_region, threshold):
     return distance_to_damage_region(particle, damage_region) <= threshold
 
 
-# Function to check if a platelet is near any activated platelet
-def is_near_activated_platelet(particle, particles, self_index, threshold):
-    if particle["kind"] != "PLT":
-        return False
-
-    for index, other_particle in enumerate(particles):
-        if index == self_index:
-            continue
-        if other_particle["kind"] != "PLT" or not other_particle["activated"]:
-            continue
-
-        distance = np.linalg.norm(particle["pos"] - other_particle["pos"])
-        if distance <= threshold:
-            return True
-
-    return False
-
-
 # Function to update platelet activation using continuous dwell time
 def update_platelet_activation(
     particles,
@@ -197,15 +180,7 @@ def update_platelet_activation(
             )
             continue
 
-        near_damage = is_near_damage_region(snapshot, damage_region, threshold)
-        near_activated_platelet = is_near_activated_platelet(
-            snapshot,
-            particle_snapshots,
-            index,
-            threshold,
-        )
-
-        if near_damage or near_activated_platelet:
+        if is_near_damage_region(snapshot, damage_region, threshold):
             particles[index]["activation_time"] += dt
         else:
             particles[index]["activation_time"] = 0.0
@@ -250,21 +225,65 @@ def contact_force(particle, moving_particles, fixed_particles, spring_constant, 
     return total_force
 
 
+# Resolve any overlap with fixed wall particles after the explicit update step.
+# This prevents tunneling through the wall layer when the timestep is large
+# relative to the contact stiffness.
+def resolve_fixed_particle_overlaps(particle, fixed_particles):
+    if particle["fixed"]:
+        return
+
+    for fixed_particle in fixed_particles:
+        displacement = particle["pos"] - fixed_particle["pos"]
+        distance = np.linalg.norm(displacement)
+        cutoff = particle["radius"] + fixed_particle["radius"]
+        overlap = cutoff - distance
+
+        if overlap <= 0:
+            continue
+
+        if distance == 0:
+            direction = np.array([0.0, 1.0 if particle["pos"][1] >= 0 else -1.0])
+        else:
+            direction = displacement / distance
+
+        particle["pos"] = particle["pos"] + overlap * direction
+
+        normal_velocity = np.dot(particle["vel"], direction)
+        if normal_velocity < 0:
+            particle["vel"] = particle["vel"] - normal_velocity * direction
+
+
 # Function to calculate the wall adhesion force for activated platelets near the damaged region
 def wall_adhesion_force(particle, damage_region, adhesion_cutoff, adhesion_strength):
     if particle["kind"] != "PLT" or not particle["activated"]:
         return np.zeros(2)
 
     target = nearest_damage_point(particle["pos"], damage_region)
-    displacement = particle["pos"] - target
+    displacement = target - particle["pos"]
     distance = np.linalg.norm(displacement)
 
-    if distance == 0 or distance > adhesion_cutoff:
+    if distance == 0:
         return np.zeros(2)
 
-    direction = displacement / distance
-    return -adhesion_strength * (adhesion_cutoff - distance) * direction
+    # Once a platelet has activated, keep pulling it toward the damaged wall
+    # target until it reaches and adheres there. Using a persistent spring-like
+    # pull avoids the failure mode where the platelet activates near the patch,
+    # drifts slightly past the cutoff, and then resumes its original path.
+    return adhesion_strength * displacement
 
+
+# Stop an activated platelet once it has effectively reached the damaged site.
+def adhere_platelet_at_target(particle, damage_region):
+    if particle["kind"] != "PLT" or not particle["activated"] or particle["adhered"]:
+        return
+
+    target = nearest_damage_point(particle["pos"], damage_region)
+    distance = np.linalg.norm(particle["pos"] - target)
+
+    if distance <= particle["radius"]:
+        particle["adhered"] = True
+        particle["pos"] = target.copy()
+        particle["vel"] = np.zeros(2)
 
 # Function to update all particles with activation, drag, contact, and optional wall adhesion
 def update_particles_with_activation_and_adhesion(
@@ -299,7 +318,7 @@ def update_particles_with_activation_and_adhesion(
     ]
 
     for index, snapshot in enumerate(particle_snapshots):
-        if snapshot["fixed"]:
+        if snapshot["fixed"] or snapshot["adhered"]:
             particles[index]["vel"] = np.zeros(2)
             particles[index]["pos"] = snapshot["pos"].copy()
             continue
@@ -318,5 +337,7 @@ def update_particles_with_activation_and_adhesion(
 
         particles[index]["vel"] = snapshot["vel"] + acceleration * dt
         particles[index]["pos"] = snapshot["pos"] + particles[index]["vel"] * dt
+        resolve_fixed_particle_overlaps(particles[index], fixed_particles)
+        adhere_platelet_at_target(particles[index], damage_region)
 
     return particles
