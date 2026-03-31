@@ -239,7 +239,7 @@ def update(frame):
     return rbc_scatter, inactive_plt_scatter, activated_plt_scatter, wall_scatter
 
 
-animation = FuncAnimation(fig, update, frames=range(0, n_steps, 10), interval=50, blit=False)
+animation = FuncAnimation(fig, update, frames=range(0, n_steps, 100), interval=50, blit=False)
 save_path = os.path.join("figs", "Blood_Cell_Animation.gif")
 animation.save(save_path, writer="pillow", fps=20)
 print(f"Animation saved to {save_path}")
