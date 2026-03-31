@@ -15,43 +15,47 @@ from assets.model_functions import (
     update_particles_with_activation_and_adhesion,
 )
 
+MICRON = 1e-6
+NANOGRAM = 1e-12
+MM = 1e-3
+
 # Parameters for the RBCs and PLTs
-rbc_radius = 8.0  # microns
-rbc_mass = 1.1  # nanograms
-plt_radius = 1.5  # microns
-plt_mass = 0.0124  # nanograms
+rbc_radius = 8.0 * MICRON
+rbc_mass = 1.1 * NANOGRAM
+plt_radius = 1.5 * MICRON
+plt_mass = 0.0124 * NANOGRAM
 
 n_rbcs = 40  #number of RBCs to simulate
 n_plts = 20  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
-k_contact = 100  #repulsive contact spring stiffness
-k_wall = 1e6  #repulsive spring stiffness for the fixed vessel wall
+k_contact = 100 * NANOGRAM  # N/m in SI after converting from ng/s^2
+k_wall = 1e6 * NANOGRAM  # N/m in SI after converting from ng/s^2
 
 #Platelet activation and adhesion parameters
-threshold = 40 #activation threshold distance in microns
+threshold = 40 * MICRON
 activation_time_required = 1e-6  #seconds
-adhesion_cutoff = 1e2  #adhesion cutoff distance in microns
-k_adhesion = 2e5 #adhesion spring strength
+adhesion_cutoff = 1e2 * MICRON
+k_adhesion = 2e5 * NANOGRAM  # N/m in SI after converting from ng/s^2
 
 # Time stepping for the simulation
-output_dt = 1e-10  #time between saved frames in seconds
+output_dt = 1e-8  #time between saved frames in seconds
 n_steps = 2000  #number of saved frames
 dt_max = output_dt
 
 #Vessel and flow parameters
-L = 400  #length of the vessel in microns
-D = 100  # iameter of the vessel in microns
-R = D / 2  #radius of the vessel in microns
-mu = 0.012 * 1e5  #plasma viscosity in ng / (micron * s)
-V_max = 1.0 * 1000  #maximum plasma velocity in microns / s
-inlet_width = 20.0  #width of the left-side inlet band in microns
+L = 400 * MICRON
+D = 100 * MICRON
+R = D / 2
+mu = 0.0012  # Pa*s = kg / (m*s)
+V_max = 1.0 * MM
+inlet_width = 20.0 * MICRON
 
 #Place the damaged region near the inlet so platelet activation is testable
 #without requiring an extremely long simulation time.
-damage_center_x = 50.0
+damage_center_x = 50.0 * MICRON
 damage_region = {
-    "x_min": damage_center_x - 20.0,
-    "x_max": damage_center_x + 20.0,
+    "x_min": damage_center_x - 20.0 * MICRON,
+    "x_max": damage_center_x + 20.0 * MICRON,
     "y": -(R - rbc_radius),
     "contact_y": -(R - rbc_radius) + rbc_radius + plt_radius,
 }
@@ -146,7 +150,7 @@ for step in range(n_steps):
 plt.figure(figsize=(8, 4))
 plotted_labels = set()
 for particle, history in zip(particles, position_history):
-    history = np.array(history)
+    history = np.array(history) / MICRON
     if particle["kind"] == "RBC":
         color = "red"
         marker_size = 8
@@ -167,11 +171,11 @@ for particle, history in zip(particles, position_history):
 
     plt.plot(history[:, 0], history[:, 1], label=label, color=color, marker="o", markersize=marker_size)
 
-wall_positions = np.array([particle["pos"] for particle in wall_particles])
+wall_positions = np.array([particle["pos"] for particle in wall_particles]) / MICRON
 plt.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", marker="o", s=6)
 plt.plot(
-    [damage_region["x_min"], damage_region["x_max"]],
-    [damage_region["y"], damage_region["y"]],
+    [damage_region["x_min"] / MICRON, damage_region["x_max"] / MICRON],
+    [damage_region["y"] / MICRON, damage_region["y"] / MICRON],
     color="orange",
     linewidth=6,
     label="Damage Region",
@@ -179,8 +183,8 @@ plt.plot(
 plt.xlabel("D (microns)")
 plt.ylabel("L (microns)")
 plt.title("Blood Cell Trajectories")
-plt.xlim(0, L)
-plt.ylim(-R, R)
+plt.xlim(0, L / MICRON)
+plt.ylim(-R / MICRON, R / MICRON)
 plt.legend()
 os.makedirs("figs", exist_ok=True)
 plt.savefig(os.path.join("figs", "RBC_Trajectories.png"), dpi=300, bbox_inches="tight")
@@ -193,20 +197,18 @@ inactive_plt_scatter = ax.scatter([], [], label="Inactive PLTs", color="gold", s
 activated_plt_scatter = ax.scatter([], [], label="Activated PLTs", color="lime", s=15, marker="o")
 wall_scatter = ax.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", s=6)
 ax.plot(
-    [damage_region["x_min"], damage_region["x_max"]],
-    [damage_region["y"], damage_region["y"]],
+    [damage_region["x_min"] / MICRON, damage_region["x_max"] / MICRON],
+    [damage_region["y"] / MICRON, damage_region["y"] / MICRON],
     color="orange",
     linewidth=6,
     label="Damage Region",
 )
-ax.set_xlim(0, L)
-ax.set_ylim(-R, R)
+ax.set_xlim(0, L / MICRON)
+ax.set_ylim(-R / MICRON, R / MICRON)
 ax.set_xlabel("D (microns)")
 ax.set_ylabel("L (microns)")
 ax.set_title("Blood Cell Animation")
 ax.legend()
-
-visual_scale = 1e5  #Show the true simulated motion in the animation
 
 #Function to update the positions of the particles in the animation at each frame
 def update(frame):
@@ -216,16 +218,13 @@ def update(frame):
 
     for index, (particle, history) in enumerate(zip(particles, position_history)):
         if particle["kind"] == "RBC":
-            start = history[0]
-            pos = start + visual_scale * (history[frame] - start)
+            pos = history[frame] / MICRON
             rbc_positions.append(pos)
         elif activation_history[index][frame]:
-            start = history[0]
-            pos = start + visual_scale * (history[frame] - start)
+            pos = history[frame] / MICRON
             activated_plt_positions.append(pos)
         else:
-            start = history[0]
-            pos = start + visual_scale * (history[frame] - start)
+            pos = history[frame] / MICRON
             inactive_plt_positions.append(pos)
 
     rbc_offsets = np.array(rbc_positions) if rbc_positions else np.empty((0, 2))

@@ -172,8 +172,8 @@ def compute_stable_dt(
         else:
             dt_displacement = dt_max
 
-        particle_dt = safety * min(dt_drag, dt_spring, dt_displacement, dt_max)
-        min_dt = min(min_dt, particle_dt)
+        particle_dt = safety * min(dt_drag, dt_spring, dt_displacement)
+        min_dt = min(min_dt, min(particle_dt, dt_max))
 
     return max(min_dt, 1e-12)
 
