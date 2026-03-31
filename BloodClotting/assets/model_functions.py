@@ -145,7 +145,7 @@ def compute_stable_dt(
     wall_spring,
     adhesion_spring,
     dt_max,
-    safety=0.1,
+    safety=0.05,
     displacement_fraction=0.1,
 ):
     min_dt = dt_max

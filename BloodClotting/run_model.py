@@ -25,11 +25,11 @@ rbc_mass = 1.1 * NANOGRAM
 plt_radius = 1.5 * MICRON
 plt_mass = 0.0124 * NANOGRAM
 
-n_rbcs = 40  #number of RBCs to simulate
-n_plts = 20  #number of platelets to simulate
+n_rbcs = 20  #number of RBCs to simulate
+n_plts = 10  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
 k_contact = 100 * NANOGRAM  # N/m in SI after converting from ng/s^2
-k_wall = 1e6 * NANOGRAM  # N/m in SI after converting from ng/s^2
+k_wall = 1e7 * NANOGRAM  # N/m in SI after converting from ng/s^2
 
 #Platelet activation and adhesion parameters
 threshold = 40 * MICRON
@@ -38,8 +38,8 @@ adhesion_cutoff = 1e2 * MICRON
 k_adhesion = 2e5 * NANOGRAM  # N/m in SI after converting from ng/s^2
 
 # Time stepping for the simulation
-output_dt = 1e-8  #time between saved frames in seconds
-n_steps = 2000  #number of saved frames
+output_dt = 1e-6  #time between saved frames in seconds
+n_steps = 10000  #number of saved frames
 dt_max = output_dt
 
 #Vessel and flow parameters
