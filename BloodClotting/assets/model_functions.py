@@ -137,6 +137,47 @@ def activated_platelet_damping_force(particle, viscosity):
     return -6 * np.pi * viscosity * particle["radius"] * particle["vel"]
 
 
+# Compute a stable explicit timestep from the current particle state.
+def compute_stable_dt(
+    particles,
+    viscosity,
+    contact_spring,
+    wall_spring,
+    adhesion_spring,
+    dt_max,
+    safety=0.1,
+    displacement_fraction=0.1,
+):
+    min_dt = dt_max
+
+    for particle in particles:
+        if particle["fixed"] or particle["adhered"]:
+            continue
+
+        radius = particle["radius"]
+        mass = particle["mass"]
+        speed = np.linalg.norm(particle["vel"])
+
+        drag_coefficient = 6 * np.pi * viscosity * radius
+        dt_drag = mass / max(drag_coefficient, 1e-12)
+
+        stiffnesses = [contact_spring, wall_spring]
+        if particle["kind"] == "PLT" and particle["activated"]:
+            stiffnesses.append(adhesion_spring)
+        k_eff = max(stiffnesses)
+        dt_spring = np.sqrt(mass / max(k_eff, 1e-12))
+
+        if speed > 0:
+            dt_displacement = displacement_fraction * radius / speed
+        else:
+            dt_displacement = dt_max
+
+        particle_dt = safety * min(dt_drag, dt_spring, dt_displacement, dt_max)
+        min_dt = min(min_dt, particle_dt)
+
+    return max(min_dt, 1e-12)
+
+
 # Function to calculate the nearest point on the damaged wall segment
 def nearest_damage_point(position, damage_region):
     x_coord = np.clip(position[0], damage_region["x_min"], damage_region["x_max"])

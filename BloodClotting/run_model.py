@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 from assets.model_functions import (
+    compute_stable_dt,
     make_plt_population,
     make_rbc_population,
     make_wall_rbc_particles,
@@ -20,10 +21,10 @@ rbc_mass = 1.1  # nanograms
 plt_radius = 1.5  # microns
 plt_mass = 0.0124  # nanograms
 
-n_rbcs = 50  #number of RBCs to simulate
-n_plts = 40  #number of platelets to simulate
+n_rbcs = 40  #number of RBCs to simulate
+n_plts = 20  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
-k_contact = 50  #repulsive contact spring stiffness
+k_contact = 100  #repulsive contact spring stiffness
 k_wall = 1e6  #repulsive spring stiffness for the fixed vessel wall
 
 #Platelet activation and adhesion parameters
@@ -33,8 +34,9 @@ adhesion_cutoff = 1e2  #adhesion cutoff distance in microns
 k_adhesion = 2e5 #adhesion spring strength
 
 # Time stepping for the simulation
-dt = 1e-9  #time step in seconds
-n_steps = 3500  #number of simulation steps to run
+output_dt = 1e-10  #time between saved frames in seconds
+n_steps = 2000  #number of saved frames
+dt_max = output_dt
 
 #Vessel and flow parameters
 L = 400  #length of the vessel in microns
@@ -88,27 +90,44 @@ if n_plts > 0:
 # Combine RBC and PLT particles into a single list for the simulation
 particles = rbc_particles + plt_particles
 
-print(f"Using dt = {dt:.3e} s")
+print(f"Using output_dt = {output_dt:.3e} s")
 
 # Run the simulation and store particle state history
 position_history = [[] for _ in particles]
 activation_history = [[] for _ in particles]
+t = 0.0
 for step in range(n_steps):
-    update_particles_with_activation_and_adhesion(
-        particles,
-        wall_particles,
-        dt,
-        mu,
-        R,
-        V_max,
-        k_contact,
-        k_wall,
-        damage_region,
-        threshold,
-        activation_time_required,
-        adhesion_cutoff,
-        k_adhesion,
-    )
+    frame_end = (step + 1) * output_dt
+    last_dt = dt_max
+
+    while t < frame_end:
+        dt = compute_stable_dt(
+            particles,
+            mu,
+            k_contact,
+            k_wall,
+            k_adhesion,
+            dt_max,
+        )
+        dt = min(dt, frame_end - t)
+        last_dt = dt
+
+        update_particles_with_activation_and_adhesion(
+            particles,
+            wall_particles,
+            dt,
+            mu,
+            R,
+            V_max,
+            k_contact,
+            k_wall,
+            damage_region,
+            threshold,
+            activation_time_required,
+            adhesion_cutoff,
+            k_adhesion,
+        )
+        t += dt
 
     for index, particle in enumerate(particles):
         position_history[index].append(particle["pos"].copy())
@@ -118,7 +137,10 @@ for step in range(n_steps):
         activated_platelets = sum(
             1 for particle in particles if particle["kind"] == "PLT" and particle["activated"]
         )
-        print(f"Step {step}: activated platelets = {activated_platelets}")
+        print(
+            f"Frame {step}: activated platelets = {activated_platelets}, "
+            f"last solver dt = {last_dt:.3e} s"
+        )
 
 # Plot particle trajectories
 plt.figure(figsize=(8, 4))
