@@ -131,6 +131,12 @@ def drag_force(particle, viscosity, vessel_radius, max_velocity):
     return 6 * np.pi * viscosity * particle["radius"] * (u_fluid - v_particle)
 
 
+# Once a platelet activates, damp its existing motion instead of continuing to
+# drive it with the background plasma flow.
+def activated_platelet_damping_force(particle, viscosity):
+    return -6 * np.pi * viscosity * particle["radius"] * particle["vel"]
+
+
 # Function to calculate the nearest point on the damaged wall segment
 def nearest_damage_point(position, damage_region):
     x_coord = np.clip(position[0], damage_region["x_min"], damage_region["x_max"])
@@ -323,7 +329,10 @@ def update_particles_with_activation_and_adhesion(
             particles[index]["pos"] = snapshot["pos"].copy()
             continue
 
-        drag = drag_force(snapshot, viscosity, vessel_radius, max_velocity)
+        if snapshot["kind"] == "PLT" and snapshot["activated"]:
+            drag = activated_platelet_damping_force(snapshot, viscosity)
+        else:
+            drag = drag_force(snapshot, viscosity, vessel_radius, max_velocity)
         contact = contact_force(snapshot, particle_snapshots, fixed_particles, contact_spring, index)
         adhesion = wall_adhesion_force(
             snapshot,

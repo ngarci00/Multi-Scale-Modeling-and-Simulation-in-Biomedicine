@@ -26,14 +26,14 @@ rng_seed = 42  #seed for reproducibility
 k_contact = 50  #repulsive contact spring stiffness
 
 #Platelet activation and adhesion parameters
-threshold = 28 #activation threshold distance in microns
+threshold = 60 #activation threshold distance in microns
 activation_time_required = 1e-6  #seconds
-adhesion_cutoff = 50  #adhesion cutoff distance in microns
-k_adhesion = 1.5e5 #adhesion spring strength
+adhesion_cutoff = 1e3  #adhesion cutoff distance in microns
+k_adhesion = 2e6 #adhesion spring strength
 
 # Time stepping for the simulation
 dt = 1e-9  #time step in seconds
-n_steps = 2000  #number of simulation steps to run
+n_steps = 3500  #number of simulation steps to run
 
 #Vessel and flow parameters
 L = 400  #length of the vessel in microns
@@ -182,7 +182,7 @@ ax.set_ylabel("L (microns)")
 ax.set_title("Blood Cell Animation")
 ax.legend()
 
-visual_scale = 10000  # Show the true simulated motion in the animation
+visual_scale = 1e5  # Show the true simulated motion in the animation
 
 #Function to update the positions of the particles in the animation at each frame
 def update(frame):
