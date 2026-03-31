@@ -216,8 +216,8 @@ def pairwise_contact_force(particle, other_particle, spring_constant):
     return spring_constant * overlap * direction
 
 
-# Function to calculate the total contact force on a particle from all others
-def contact_force(particle, moving_particles, fixed_particles, spring_constant, self_index):
+# Function to calculate the total particle-particle contact force on a moving particle
+def contact_force(particle, moving_particles, spring_constant, self_index):
     total_force = np.zeros(2)
 
     for index, other_particle in enumerate(moving_particles):
@@ -225,8 +225,15 @@ def contact_force(particle, moving_particles, fixed_particles, spring_constant, 
             continue
         total_force += pairwise_contact_force(particle, other_particle, spring_constant)
 
+    return total_force
+
+
+# Function to calculate the repulsive spring force from the fixed wall particles
+def wall_contact_force(particle, fixed_particles, wall_spring_constant):
+    total_force = np.zeros(2)
+
     for other_particle in fixed_particles:
-        total_force += pairwise_contact_force(particle, other_particle, spring_constant)
+        total_force += pairwise_contact_force(particle, other_particle, wall_spring_constant)
 
     return total_force
 
@@ -300,6 +307,7 @@ def update_particles_with_activation_and_adhesion(
     vessel_radius,
     max_velocity,
     contact_spring,
+    wall_spring,
     damage_region,
     threshold,
     activation_time_required,
@@ -333,7 +341,8 @@ def update_particles_with_activation_and_adhesion(
             drag = activated_platelet_damping_force(snapshot, viscosity)
         else:
             drag = drag_force(snapshot, viscosity, vessel_radius, max_velocity)
-        contact = contact_force(snapshot, particle_snapshots, fixed_particles, contact_spring, index)
+        contact = contact_force(snapshot, particle_snapshots, contact_spring, index)
+        wall_contact = wall_contact_force(snapshot, fixed_particles, wall_spring)
         adhesion = wall_adhesion_force(
             snapshot,
             damage_region,
@@ -341,7 +350,7 @@ def update_particles_with_activation_and_adhesion(
             k_adhesion,
         )
 
-        total_force = drag + contact + adhesion
+        total_force = drag + contact + wall_contact + adhesion
         acceleration = total_force / snapshot["mass"]
 
         particles[index]["vel"] = snapshot["vel"] + acceleration * dt

@@ -24,12 +24,13 @@ n_rbcs = 50  #number of RBCs to simulate
 n_plts = 40  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
 k_contact = 50  #repulsive contact spring stiffness
+k_wall = 1e6  #repulsive spring stiffness for the fixed vessel wall
 
 #Platelet activation and adhesion parameters
-threshold = 60 #activation threshold distance in microns
+threshold = 40 #activation threshold distance in microns
 activation_time_required = 1e-6  #seconds
-adhesion_cutoff = 1e3  #adhesion cutoff distance in microns
-k_adhesion = 2e6 #adhesion spring strength
+adhesion_cutoff = 1e2  #adhesion cutoff distance in microns
+k_adhesion = 2e5 #adhesion spring strength
 
 # Time stepping for the simulation
 dt = 1e-9  #time step in seconds
@@ -101,6 +102,7 @@ for step in range(n_steps):
         R,
         V_max,
         k_contact,
+        k_wall,
         damage_region,
         threshold,
         activation_time_required,
@@ -182,7 +184,7 @@ ax.set_ylabel("L (microns)")
 ax.set_title("Blood Cell Animation")
 ax.legend()
 
-visual_scale = 1e5  # Show the true simulated motion in the animation
+visual_scale = 1  # Show the true simulated motion in the animation
 
 #Function to update the positions of the particles in the animation at each frame
 def update(frame):
