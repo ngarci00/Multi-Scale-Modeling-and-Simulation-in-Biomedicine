@@ -11,7 +11,6 @@ from assets.model_functions import (
     compute_stable_dt,
     make_plt_population,
     make_rbc_population,
-    make_wall_rbc_particles,
     update_particles_with_activation_and_adhesion,
 )
 
@@ -21,21 +20,19 @@ rbc_mass = 1.1
 plt_radius = 1.5
 plt_mass = 0.0124
 
-n_rbcs = 30  #number of RBCs to simulate
-n_plts = 15  #number of platelets to simulate
+n_rbcs = 80  #number of RBCs to simulate
+n_plts = 45  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
-k_contact = 0.02
-k_wall = 0.1
-
+k_contact = 1  #contact stiffness for particle-particle and particle-wall interactions
 #Platelet activation and adhesion parameters
-threshold = 20
-activation_time_required = 2
+threshold = 45 #threshold for platelet activation based on contact force
+activation_time_required = 2 #time required for a platelet to become fully activated after exceeding the activation threshold
 adhesion_cutoff = 4 * plt_radius
-k_adhesion = 2
+k_adhesion = 3.0  #adhesion stiffness for activated platelets in contact with the damaged region
 
 # Time stepping for the simulation
-output_dt = 0.1
-n_steps = 2000
+output_dt = 0.1  #time interval for recording particle states and plotting
+n_steps = 3000 
 dt_max = output_dt
 
 #Vessel and flow parameters
@@ -48,23 +45,21 @@ inlet_width = 20.0
 
 #Place the damaged region near the inlet so platelet activation is testable
 #without requiring an extremely long simulation time.
-damage_center_x = 50.0
+damage_center_x = 150.0
 damage_region = {
-    "x_min": damage_center_x - 20.0,
-    "x_max": damage_center_x + 20.0,
-    "y": -(R - rbc_radius),
-    "contact_y": -(R - rbc_radius) + rbc_radius + plt_radius,
+    "x_min": damage_center_x - 30.0,
+    "x_max": damage_center_x + 30.0,
+    "y": -R,
+    "contact_y": -R + 2 * plt_radius,
 }
 
-# Initialize the random number generator and create the wall particles
+# Initialize the random number generator
 rng = np.random.default_rng(rng_seed)
-wall_particles = make_wall_rbc_particles(L, R, rbc_radius, rbc_mass)
 
-# Random initial particle positions inside the wall-particle boundaries
-wall_center_y = R - rbc_radius
-upper_bound_RBC = wall_center_y - (rbc_radius + rbc_radius)
+# Random initial particle positions inside the analytic vessel walls
+upper_bound_RBC = R - rbc_radius
 lower_bound_RBC = -upper_bound_RBC
-upper_bound_PLT = wall_center_y - (rbc_radius + plt_radius)
+upper_bound_PLT = R - plt_radius
 lower_bound_PLT = -upper_bound_PLT
 
 rbc_positions = [
@@ -103,11 +98,9 @@ for step in range(n_steps):
     while t < frame_end:
         dt = compute_stable_dt(
             particles,
-            wall_particles,
             R,
             V_max,
             k_contact,
-            k_wall,
             damage_region,
             k_adhesion,
             dt_max,
@@ -117,13 +110,11 @@ for step in range(n_steps):
 
         update_particles_with_activation_and_adhesion(
             particles,
-            wall_particles,
             dt,
             mu,
             R,
             V_max,
             k_contact,
-            k_wall,
             damage_region,
             threshold,
             activation_time_required,
@@ -170,8 +161,9 @@ for particle, history in zip(particles, position_history):
 
     plt.plot(history[:, 0], history[:, 1], label=label, color=color, marker="o", markersize=marker_size)
 
-wall_positions = np.array([particle["pos"] for particle in wall_particles])
-plt.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", marker="o", s=6)
+wall_x = np.linspace(0, L, 1000)
+plt.plot(wall_x, -R * np.ones_like(wall_x), color="royalblue", linewidth=4, label="Lower Wall")
+plt.plot(wall_x, R * np.ones_like(wall_x), color="royalblue", linewidth=4, label="Upper Wall")
 plt.plot(
     [damage_region["x_min"], damage_region["x_max"]],
     [damage_region["y"], damage_region["y"]],
@@ -191,15 +183,16 @@ plt.close()
 
 # Add the animation using matplotlib's FuncAnimation
 fig, ax = plt.subplots(figsize=(8, 4))
-rbc_scatter = ax.scatter([], [], label="RBCs", color="red", s=30, marker="o")
-inactive_plt_scatter = ax.scatter([], [], label="Inactive PLTs", color="gold", s=15, marker="o")
-activated_plt_scatter = ax.scatter([], [], label="Activated PLTs", color="lime", s=15, marker="o")
-wall_scatter = ax.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", s=6)
+rbc_scatter = ax.scatter([], [], label="RBCs", color="red", s=50, marker="o")
+inactive_plt_scatter = ax.scatter([], [], label="Inactive PLTs", color="gold", s=30, marker="o")
+activated_plt_scatter = ax.scatter([], [], label="Activated PLTs", color="blue", s=30, marker="o")
+ax.plot(wall_x, -R * np.ones_like(wall_x), color="firebrick", linewidth=12, label="Lower Wall")
+ax.plot(wall_x, R * np.ones_like(wall_x), color="firebrick", linewidth=12, label="Upper Wall")
 ax.plot(
     [damage_region["x_min"], damage_region["x_max"]],
     [damage_region["y"], damage_region["y"]],
     color="orange",
-    linewidth=6,
+    linewidth=12,
     label="Damage Region",
 )
 ax.set_xlim(0, L)
@@ -235,10 +228,10 @@ def update(frame):
     activated_plt_scatter.set_offsets(activated_plt_offsets)
     ax.set_title(f"Blood Cell Animation - Step {frame}")
 
-    return rbc_scatter, inactive_plt_scatter, activated_plt_scatter, wall_scatter
+    return rbc_scatter, inactive_plt_scatter, activated_plt_scatter
 
 animation = FuncAnimation(fig, update, frames=range(0, n_steps, 5), interval=50, blit=False)
 save_path = os.path.join("figs", "Blood_Cell_Animation.gif")
-animation.save(save_path, writer="pillow", fps=20)
+animation.save(save_path, writer="pillow", fps=20, dpi=300)
 print(f"Animation saved to {save_path}")
 plt.close()

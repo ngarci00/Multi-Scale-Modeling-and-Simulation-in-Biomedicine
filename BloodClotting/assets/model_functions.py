@@ -103,20 +103,6 @@ def sample_non_overlapping_positions(count, radius, x_bounds, y_bounds, rng, exi
     return [position.tolist() for position in positions]
 
 
-# Function to create fixed RBC particles along the upper and lower vessel walls
-
-def make_wall_rbc_particles(length, vessel_radius, radius, mass):
-    x_positions = np.arange(radius, length)
-    wall_y = vessel_radius - radius
-    wall_positions = []
-
-    for x_pos in x_positions:
-        wall_positions.append([x_pos, wall_y])
-        wall_positions.append([x_pos, -wall_y])
-
-    return make_rbc_population(radius, mass, wall_positions, fixed=True)
-
-
 # Function to calculate the plasma velocity profile across the vessel (Poiseuille flow)
 def plasma_velocity_profile(y, vessel_radius, max_velocity):
     return max_velocity * (1 - (y / vessel_radius) ** 2)
@@ -141,11 +127,9 @@ def activated_platelet_damping_force(particle, viscosity):
 # update used in this project.
 def compute_stable_dt(
     particles,
-    fixed_particles,
     vessel_radius,
     max_velocity,
     contact_spring,
-    wall_spring,
     damage_region,
     adhesion_spring,
     dt_max,
@@ -170,10 +154,9 @@ def compute_stable_dt(
             [plasma_velocity_profile(particle["pos"][1], vessel_radius, max_velocity), 0.0]
         )
         contact = contact_force(particle, particle_snapshots, contact_spring, index)
-        wall_contact = wall_contact_force(particle, fixed_particles, wall_spring)
-        adhesion = adhesion_velocity(particle, damage_region, adhesion_spring)
+        adhesion = adhesion_velocity(particle, particle_snapshots, damage_region, adhesion_spring)
 
-        speed = np.linalg.norm(base_velocity + contact + wall_contact + adhesion)
+        speed = np.linalg.norm(base_velocity + contact + adhesion)
         if speed <= 1e-12:
             continue
 
@@ -188,6 +171,36 @@ def nearest_damage_point(position, damage_region):
     x_coord = np.clip(position[0], damage_region["x_min"], damage_region["x_max"])
     y_coord = damage_region.get("contact_y", damage_region["y"])
     return np.array([x_coord, y_coord], dtype=float)
+
+
+# Build platelet-sized adhesion sites along the damaged wall patch.
+def damage_target_sites(damage_region, platelet_radius):
+    x_min = damage_region["x_min"] + platelet_radius
+    x_max = damage_region["x_max"] - platelet_radius
+    y_coord = damage_region.get("contact_y", damage_region["y"])
+
+    if x_max <= x_min:
+        return [np.array([(damage_region["x_min"] + damage_region["x_max"]) / 2, y_coord], dtype=float)]
+
+    spacing = 2 * platelet_radius
+    x_values = np.arange(x_min, x_max + 0.5 * spacing, spacing)
+    return [np.array([x_value, y_coord], dtype=float) for x_value in x_values]
+
+
+# Pick the nearest unoccupied adhesion site on the damaged wall.
+def nearest_available_damage_target(particle, particles, damage_region):
+    target_sites = damage_target_sites(damage_region, particle["radius"])
+    occupied_targets = [other["pos"] for other in particles if other["kind"] == "PLT" and other["adhered"]]
+
+    available_sites = []
+    for site in target_sites:
+        occupied = any(np.linalg.norm(site - occupied_site) < particle["radius"] for occupied_site in occupied_targets)
+        if not occupied:
+            available_sites.append(site)
+
+    candidate_sites = available_sites if available_sites else target_sites
+    distances = [np.linalg.norm(particle["pos"] - site) for site in candidate_sites]
+    return candidate_sites[int(np.argmin(distances))].copy()
 
 
 # Function to calculate the distance between a particle and the damaged wall segment
@@ -274,42 +287,21 @@ def contact_force(particle, moving_particles, spring_constant, self_index):
     return total_force
 
 
-# Function to calculate the repulsive spring force from the fixed wall particles
-def wall_contact_force(particle, fixed_particles, wall_spring_constant):
-    total_force = np.zeros(2)
-
-    for other_particle in fixed_particles:
-        total_force += pairwise_contact_force(particle, other_particle, wall_spring_constant)
-
-    return total_force
-
-
-# Resolve any overlap with fixed wall particles after the explicit update step.
-# This prevents tunneling through the wall layer when the timestep is large
-# relative to the contact stiffness.
-def resolve_fixed_particle_overlaps(particle, fixed_particles):
-    if particle["fixed"]:
+# Apply analytic upper/lower vessel walls, matching the simpler wall handling
+# used in p3_bueno.py.
+def apply_vessel_wall_bounds(particle, vessel_radius):
+    if particle["fixed"] or particle["adhered"]:
         return
 
-    for fixed_particle in fixed_particles:
-        displacement = particle["pos"] - fixed_particle["pos"]
-        distance = np.linalg.norm(displacement)
-        cutoff = particle["radius"] + fixed_particle["radius"]
-        overlap = cutoff - distance
+    y_min = -vessel_radius + particle["radius"]
+    y_max = vessel_radius - particle["radius"]
 
-        if overlap <= 0:
-            continue
-
-        if distance == 0:
-            direction = np.array([0.0, 1.0 if particle["pos"][1] >= 0 else -1.0])
-        else:
-            direction = displacement / distance
-
-        particle["pos"] = particle["pos"] + overlap * direction
-
-        normal_velocity = np.dot(particle["vel"], direction)
-        if normal_velocity < 0:
-            particle["vel"] = particle["vel"] - normal_velocity * direction
+    if particle["pos"][1] <= y_min:
+        particle["pos"][1] = y_min
+        particle["vel"][1] = abs(particle["vel"][1])
+    elif particle["pos"][1] >= y_max:
+        particle["pos"][1] = y_max
+        particle["vel"][1] = -abs(particle["vel"][1])
 
 
 # Function to calculate the wall adhesion force for activated platelets near the damaged region
@@ -333,11 +325,11 @@ def wall_adhesion_force(particle, damage_region, adhesion_cutoff, adhesion_stren
 
 # Convert the activated platelet attraction into a direct velocity correction,
 # following the kinematic update style used in p3_bueno.py.
-def adhesion_velocity(particle, damage_region, adhesion_strength):
+def adhesion_velocity(particle, particles, damage_region, adhesion_strength):
     if particle["kind"] != "PLT" or not particle["activated"]:
         return np.zeros(2)
 
-    target = nearest_damage_point(particle["pos"], damage_region)
+    target = nearest_available_damage_target(particle, particles, damage_region)
     displacement = target - particle["pos"]
     distance = np.linalg.norm(displacement)
 
@@ -345,15 +337,20 @@ def adhesion_velocity(particle, damage_region, adhesion_strength):
         return np.zeros(2)
 
     direction = displacement / distance
-    return adhesion_strength * np.array([0.5 * direction[0], direction[1]])
+
+    # Bias the activated platelet motion strongly toward the wall-normal
+    # direction so it does not keep drifting past the damaged region.
+    x_velocity = 0.1 * adhesion_strength * direction[0]
+    y_velocity = 3.0 * adhesion_strength * direction[1]
+    return np.array([x_velocity, y_velocity])
 
 
 # Stop an activated platelet once it has effectively reached the damaged site.
-def adhere_platelet_at_target(particle, damage_region):
+def adhere_platelet_at_target(particle, particles, damage_region):
     if particle["kind"] != "PLT" or not particle["activated"] or particle["adhered"]:
         return
 
-    target = nearest_damage_point(particle["pos"], damage_region)
+    target = nearest_available_damage_target(particle, particles, damage_region)
     distance = np.linalg.norm(particle["pos"] - target)
 
     if distance <= particle["radius"]:
@@ -364,13 +361,11 @@ def adhere_platelet_at_target(particle, damage_region):
 # Function to update all particles with activation, drag, contact, and optional wall adhesion
 def update_particles_with_activation_and_adhesion(
     particles,
-    fixed_particles,
     dt,
     viscosity,
     vessel_radius,
     max_velocity,
     contact_spring,
-    wall_spring,
     damage_region,
     threshold,
     activation_time_required,
@@ -400,21 +395,24 @@ def update_particles_with_activation_and_adhesion(
             particles[index]["pos"] = snapshot["pos"].copy()
             continue
 
-        base_velocity = np.array(
-            [plasma_velocity_profile(snapshot["pos"][1], vessel_radius, max_velocity), 0.0]
-        )
+        if snapshot["kind"] == "PLT" and snapshot["activated"]:
+            base_velocity = np.zeros(2)
+        else:
+            base_velocity = np.array(
+                [plasma_velocity_profile(snapshot["pos"][1], vessel_radius, max_velocity), 0.0]
+            )
         contact = contact_force(snapshot, particle_snapshots, contact_spring, index)
-        wall_contact = wall_contact_force(snapshot, fixed_particles, wall_spring)
         adhesion = adhesion_velocity(
             snapshot,
+            particle_snapshots,
             damage_region,
             k_adhesion,
         )
-        velocity = base_velocity + contact + wall_contact + adhesion
+        velocity = base_velocity + contact + adhesion
 
         particles[index]["vel"] = velocity
         particles[index]["pos"] = snapshot["pos"] + velocity * dt
-        resolve_fixed_particle_overlaps(particles[index], fixed_particles)
-        adhere_platelet_at_target(particles[index], damage_region)
+        apply_vessel_wall_bounds(particles[index], vessel_radius)
+        adhere_platelet_at_target(particles[index], particles, damage_region)
 
     return particles
