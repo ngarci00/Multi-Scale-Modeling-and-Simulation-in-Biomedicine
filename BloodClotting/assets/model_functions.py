@@ -137,43 +137,48 @@ def activated_platelet_damping_force(particle, viscosity):
     return -6 * np.pi * viscosity * particle["radius"] * particle["vel"]
 
 
-# Compute a stable explicit timestep from the current particle state.
+# Compute a stable timestep from the current particle state for the kinematic
+# update used in this project.
 def compute_stable_dt(
     particles,
-    viscosity,
+    fixed_particles,
+    vessel_radius,
+    max_velocity,
     contact_spring,
     wall_spring,
+    damage_region,
     adhesion_spring,
     dt_max,
-    safety=0.05,
-    displacement_fraction=0.1,
+    displacement_fraction=0.25,
 ):
     min_dt = dt_max
 
-    for particle in particles:
+    particle_snapshots = [
+        {
+            **particle,
+            "pos": particle["pos"].copy(),
+            "vel": particle["vel"].copy(),
+        }
+        for particle in particles
+    ]
+
+    for index, particle in enumerate(particle_snapshots):
         if particle["fixed"] or particle["adhered"]:
             continue
 
-        radius = particle["radius"]
-        mass = particle["mass"]
-        speed = np.linalg.norm(particle["vel"])
+        base_velocity = np.array(
+            [plasma_velocity_profile(particle["pos"][1], vessel_radius, max_velocity), 0.0]
+        )
+        contact = contact_force(particle, particle_snapshots, contact_spring, index)
+        wall_contact = wall_contact_force(particle, fixed_particles, wall_spring)
+        adhesion = adhesion_velocity(particle, damage_region, adhesion_spring)
 
-        drag_coefficient = 6 * np.pi * viscosity * radius
-        dt_drag = mass / max(drag_coefficient, 1e-12)
+        speed = np.linalg.norm(base_velocity + contact + wall_contact + adhesion)
+        if speed <= 1e-12:
+            continue
 
-        stiffnesses = [contact_spring, wall_spring]
-        if particle["kind"] == "PLT" and particle["activated"]:
-            stiffnesses.append(adhesion_spring)
-        k_eff = max(stiffnesses)
-        dt_spring = np.sqrt(mass / max(k_eff, 1e-12))
-
-        if speed > 0:
-            dt_displacement = displacement_fraction * radius / speed
-        else:
-            dt_displacement = dt_max
-
-        particle_dt = safety * min(dt_drag, dt_spring, dt_displacement)
-        min_dt = min(min_dt, min(particle_dt, dt_max))
+        particle_dt = displacement_fraction * particle["radius"] / speed
+        min_dt = min(min_dt, particle_dt, dt_max)
 
     return max(min_dt, 1e-12)
 
@@ -326,6 +331,23 @@ def wall_adhesion_force(particle, damage_region, adhesion_cutoff, adhesion_stren
     return adhesion_strength * displacement
 
 
+# Convert the activated platelet attraction into a direct velocity correction,
+# following the kinematic update style used in p3_bueno.py.
+def adhesion_velocity(particle, damage_region, adhesion_strength):
+    if particle["kind"] != "PLT" or not particle["activated"]:
+        return np.zeros(2)
+
+    target = nearest_damage_point(particle["pos"], damage_region)
+    displacement = target - particle["pos"]
+    distance = np.linalg.norm(displacement)
+
+    if distance <= 1e-12:
+        return np.zeros(2)
+
+    direction = displacement / distance
+    return adhesion_strength * np.array([0.5 * direction[0], direction[1]])
+
+
 # Stop an activated platelet once it has effectively reached the damaged site.
 def adhere_platelet_at_target(particle, damage_region):
     if particle["kind"] != "PLT" or not particle["activated"] or particle["adhered"]:
@@ -378,24 +400,20 @@ def update_particles_with_activation_and_adhesion(
             particles[index]["pos"] = snapshot["pos"].copy()
             continue
 
-        if snapshot["kind"] == "PLT" and snapshot["activated"]:
-            drag = activated_platelet_damping_force(snapshot, viscosity)
-        else:
-            drag = drag_force(snapshot, viscosity, vessel_radius, max_velocity)
+        base_velocity = np.array(
+            [plasma_velocity_profile(snapshot["pos"][1], vessel_radius, max_velocity), 0.0]
+        )
         contact = contact_force(snapshot, particle_snapshots, contact_spring, index)
         wall_contact = wall_contact_force(snapshot, fixed_particles, wall_spring)
-        adhesion = wall_adhesion_force(
+        adhesion = adhesion_velocity(
             snapshot,
             damage_region,
-            adhesion_cutoff,
             k_adhesion,
         )
+        velocity = base_velocity + contact + wall_contact + adhesion
 
-        total_force = drag + contact + wall_contact + adhesion
-        acceleration = total_force / snapshot["mass"]
-
-        particles[index]["vel"] = snapshot["vel"] + acceleration * dt
-        particles[index]["pos"] = snapshot["pos"] + particles[index]["vel"] * dt
+        particles[index]["vel"] = velocity
+        particles[index]["pos"] = snapshot["pos"] + velocity * dt
         resolve_fixed_particle_overlaps(particles[index], fixed_particles)
         adhere_platelet_at_target(particles[index], damage_region)
 

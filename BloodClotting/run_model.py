@@ -15,47 +15,43 @@ from assets.model_functions import (
     update_particles_with_activation_and_adhesion,
 )
 
-MICRON = 1e-6
-NANOGRAM = 1e-12
-MM = 1e-3
-
 # Parameters for the RBCs and PLTs
-rbc_radius = 8.0 * MICRON
-rbc_mass = 1.1 * NANOGRAM
-plt_radius = 1.5 * MICRON
-plt_mass = 0.0124 * NANOGRAM
+rbc_radius = 8.0
+rbc_mass = 1.1
+plt_radius = 1.5
+plt_mass = 0.0124
 
-n_rbcs = 20  #number of RBCs to simulate
-n_plts = 10  #number of platelets to simulate
+n_rbcs = 30  #number of RBCs to simulate
+n_plts = 15  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
-k_contact = 100 * NANOGRAM  # N/m in SI after converting from ng/s^2
-k_wall = 1e7 * NANOGRAM  # N/m in SI after converting from ng/s^2
+k_contact = 0.02
+k_wall = 0.1
 
 #Platelet activation and adhesion parameters
-threshold = 40 * MICRON
-activation_time_required = 1e-6  #seconds
-adhesion_cutoff = 1e2 * MICRON
-k_adhesion = 2e5 * NANOGRAM  # N/m in SI after converting from ng/s^2
+threshold = 20
+activation_time_required = 2
+adhesion_cutoff = 4 * plt_radius
+k_adhesion = 2
 
 # Time stepping for the simulation
-output_dt = 1e-6  #time between saved frames in seconds
-n_steps = 10000  #number of saved frames
+output_dt = 0.1
+n_steps = 2000
 dt_max = output_dt
 
 #Vessel and flow parameters
-L = 400 * MICRON
-D = 100 * MICRON
+L = 400
+D = 100
 R = D / 2
-mu = 0.0012  # Pa*s = kg / (m*s)
-V_max = 1.0 * MM
-inlet_width = 20.0 * MICRON
+mu = 0.012
+V_max = 1.0
+inlet_width = 20.0
 
 #Place the damaged region near the inlet so platelet activation is testable
 #without requiring an extremely long simulation time.
-damage_center_x = 50.0 * MICRON
+damage_center_x = 50.0
 damage_region = {
-    "x_min": damage_center_x - 20.0 * MICRON,
-    "x_max": damage_center_x + 20.0 * MICRON,
+    "x_min": damage_center_x - 20.0,
+    "x_max": damage_center_x + 20.0,
     "y": -(R - rbc_radius),
     "contact_y": -(R - rbc_radius) + rbc_radius + plt_radius,
 }
@@ -94,7 +90,7 @@ if n_plts > 0:
 # Combine RBC and PLT particles into a single list for the simulation
 particles = rbc_particles + plt_particles
 
-print(f"Using output_dt = {output_dt:.3e} s")
+print(f"Using output_dt = {output_dt:.3f}")
 
 # Run the simulation and store particle state history
 position_history = [[] for _ in particles]
@@ -107,9 +103,12 @@ for step in range(n_steps):
     while t < frame_end:
         dt = compute_stable_dt(
             particles,
-            mu,
+            wall_particles,
+            R,
+            V_max,
             k_contact,
             k_wall,
+            damage_region,
             k_adhesion,
             dt_max,
         )
@@ -143,14 +142,14 @@ for step in range(n_steps):
         )
         print(
             f"Frame {step}: activated platelets = {activated_platelets}, "
-            f"last solver dt = {last_dt:.3e} s"
+            f"last solver dt = {last_dt:.3e}"
         )
 
 # Plot particle trajectories
 plt.figure(figsize=(8, 4))
 plotted_labels = set()
 for particle, history in zip(particles, position_history):
-    history = np.array(history) / MICRON
+    history = np.array(history)
     if particle["kind"] == "RBC":
         color = "red"
         marker_size = 8
@@ -171,11 +170,11 @@ for particle, history in zip(particles, position_history):
 
     plt.plot(history[:, 0], history[:, 1], label=label, color=color, marker="o", markersize=marker_size)
 
-wall_positions = np.array([particle["pos"] for particle in wall_particles]) / MICRON
+wall_positions = np.array([particle["pos"] for particle in wall_particles])
 plt.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", marker="o", s=6)
 plt.plot(
-    [damage_region["x_min"] / MICRON, damage_region["x_max"] / MICRON],
-    [damage_region["y"] / MICRON, damage_region["y"] / MICRON],
+    [damage_region["x_min"], damage_region["x_max"]],
+    [damage_region["y"], damage_region["y"]],
     color="orange",
     linewidth=6,
     label="Damage Region",
@@ -183,8 +182,8 @@ plt.plot(
 plt.xlabel("D (microns)")
 plt.ylabel("L (microns)")
 plt.title("Blood Cell Trajectories")
-plt.xlim(0, L / MICRON)
-plt.ylim(-R / MICRON, R / MICRON)
+plt.xlim(0, L)
+plt.ylim(-R, R)
 plt.legend()
 os.makedirs("figs", exist_ok=True)
 plt.savefig(os.path.join("figs", "RBC_Trajectories.png"), dpi=300, bbox_inches="tight")
@@ -197,14 +196,14 @@ inactive_plt_scatter = ax.scatter([], [], label="Inactive PLTs", color="gold", s
 activated_plt_scatter = ax.scatter([], [], label="Activated PLTs", color="lime", s=15, marker="o")
 wall_scatter = ax.scatter(wall_positions[:, 0], wall_positions[:, 1], label="Wall RBCs", color="firebrick", s=6)
 ax.plot(
-    [damage_region["x_min"] / MICRON, damage_region["x_max"] / MICRON],
-    [damage_region["y"] / MICRON, damage_region["y"] / MICRON],
+    [damage_region["x_min"], damage_region["x_max"]],
+    [damage_region["y"], damage_region["y"]],
     color="orange",
     linewidth=6,
     label="Damage Region",
 )
-ax.set_xlim(0, L / MICRON)
-ax.set_ylim(-R / MICRON, R / MICRON)
+ax.set_xlim(0, L)
+ax.set_ylim(-R, R)
 ax.set_xlabel("D (microns)")
 ax.set_ylabel("L (microns)")
 ax.set_title("Blood Cell Animation")
@@ -218,13 +217,13 @@ def update(frame):
 
     for index, (particle, history) in enumerate(zip(particles, position_history)):
         if particle["kind"] == "RBC":
-            pos = history[frame] / MICRON
+            pos = history[frame]
             rbc_positions.append(pos)
         elif activation_history[index][frame]:
-            pos = history[frame] / MICRON
+            pos = history[frame]
             activated_plt_positions.append(pos)
         else:
-            pos = history[frame] / MICRON
+            pos = history[frame]
             inactive_plt_positions.append(pos)
 
     rbc_offsets = np.array(rbc_positions) if rbc_positions else np.empty((0, 2))
@@ -238,8 +237,7 @@ def update(frame):
 
     return rbc_scatter, inactive_plt_scatter, activated_plt_scatter, wall_scatter
 
-
-animation = FuncAnimation(fig, update, frames=range(0, n_steps, 100), interval=50, blit=False)
+animation = FuncAnimation(fig, update, frames=range(0, n_steps, 5), interval=50, blit=False)
 save_path = os.path.join("figs", "Blood_Cell_Animation.gif")
 animation.save(save_path, writer="pillow", fps=20)
 print(f"Animation saved to {save_path}")
