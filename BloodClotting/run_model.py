@@ -20,10 +20,10 @@ rbc_mass = 1.1
 plt_radius = 1.5
 plt_mass = 0.0124
 
-n_rbcs = 80  #number of RBCs to simulate
-n_plts = 45  #number of platelets to simulate
+n_rbcs = 30  #number of RBCs to simulate
+n_plts = 15  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
-k_contact = 1  #contact stiffness for particle-particle and particle-wall interactions
+k_contact = 3  #contact stiffness for particle-particle and particle-wall interactions
 #Platelet activation and adhesion parameters
 threshold = 45 #threshold for platelet activation based on contact force
 activation_time_required = 2 #time required for a platelet to become fully activated after exceeding the activation threshold
