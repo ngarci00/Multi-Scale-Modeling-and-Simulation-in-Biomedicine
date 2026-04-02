@@ -6,15 +6,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from assets.model_functions import (compute_stable_dt,make_plt_population, make_rbc_population,update_particles_with_activation_and_adhesion)
 
-from assets.model_functions import (
-    compute_stable_dt,
-    make_plt_population,
-    make_rbc_population,
-    update_particles_with_activation_and_adhesion,
-)
-
-# Parameters for the RBCs and PLTs
+#Parameters for the RBCs and PLTs
 rbc_radius = 8.0 #RBC radius in microns
 rbc_mass = 1.1 #RBC mass in nanograms
 plt_radius = 1.5 #PLT radius in microns
@@ -24,6 +18,7 @@ n_rbcs = 40  #number of RBCs to simulate
 n_plts = 15  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
 k_contact = 3  #contact stiffness for particle-particle and particle-wall interactions
+
 #Platelet activation and adhesion parameters
 threshold = 45 #threshold for platelet activation based on contact force
 activation_time_required = 2 #time required for a platelet to become fully activated after exceeding the activation threshold
@@ -47,8 +42,8 @@ inlet_width = 20.0 #width of the inlet region where particles are initialized in
 #without requiring an extremely long simulation time.
 damage_center_x = 150.0
 damage_region = {
-    "x_min": damage_center_x - 30.0,
-    "x_max": damage_center_x + 30.0,
+    "x_min": damage_center_x - 60.0,
+    "x_max": damage_center_x + 60.0,
     "y": -R,
     "contact_y": -R + 2 * plt_radius,
 }
@@ -155,6 +150,7 @@ fig, ax = plt.subplots(figsize=(8, 4))
 rbc_scatter = ax.scatter([], [], label="RBCs", color="red", s=50, marker="o")
 inactive_plt_scatter = ax.scatter([], [], label="Inactive PLTs", color="gold", s=30, marker="o")
 activated_plt_scatter = ax.scatter([], [], label="Activated PLTs", color="blue", s=30, marker="o")
+#Plot the vessel walls and damaged region as background elements in the animation:
 wall_x = np.linspace(0, L, 1000)
 ax.plot(wall_x, -R * np.ones_like(wall_x), color="firebrick", linewidth=12, label="Lower Wall")
 ax.plot(wall_x, R * np.ones_like(wall_x), color="firebrick", linewidth=12, label="Upper Wall")

@@ -1,6 +1,7 @@
 #Nicolas Garcia Callejas - BENG 535 - Project 3: Blood Clotting
 #This script serves as a collection of all the used functions needed in the main script to run the model.
 import numpy as np
+
 #Function to create a generic particle dictionary with the specified parameters
 def make_particle(kind,radius,mass,position,velocity=None,fixed=False,activated=False,activation_time=0.0):
     if velocity is None:
