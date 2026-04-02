@@ -1,6 +1,6 @@
 import os
-# Nicolas Garcia Callejas BENG 535 - Project 3: Blood Clotting
-# This script serves as the main script to run the model, run the simulation, and plot the results.
+#Nicolas Garcia Callejas BENG 535 - Project 3: Blood Clotting
+#This script serves as the main script to run the model, run the simulation, and plot the results.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 import numpy as np
@@ -15,12 +15,12 @@ from assets.model_functions import (
 )
 
 # Parameters for the RBCs and PLTs
-rbc_radius = 8.0
-rbc_mass = 1.1
-plt_radius = 1.5
-plt_mass = 0.0124
+rbc_radius = 8.0 #RBC radius in microns
+rbc_mass = 1.1 #RBC mass in nanograms
+plt_radius = 1.5 #PLT radius in microns
+plt_mass = 0.0124 #PLT mass in nanograms
 
-n_rbcs = 30  #number of RBCs to simulate
+n_rbcs = 40  #number of RBCs to simulate
 n_plts = 15  #number of platelets to simulate
 rng_seed = 42  #seed for reproducibility
 k_contact = 3  #contact stiffness for particle-particle and particle-wall interactions
@@ -30,18 +30,18 @@ activation_time_required = 2 #time required for a platelet to become fully activ
 adhesion_cutoff = 4 * plt_radius
 k_adhesion = 3.0  #adhesion stiffness for activated platelets in contact with the damaged region
 
-# Time stepping for the simulation
+#Time stepping for the simulation
 output_dt = 0.1  #time interval for recording particle states and plotting
-n_steps = 3000 
+n_steps = 6000 #number of simulation steps to run
 dt_max = output_dt
 
 #Vessel and flow parameters
-L = 400
-D = 100
-R = D / 2
-mu = 0.012
-V_max = 1.0
-inlet_width = 20.0
+L = 400 #length of the vessel in microns
+D = 100 #diameter of the vessel in microns
+R = D / 2 #vessel radius in microns
+mu = 0.012 #dynamic viscosity of blood in g/(micron*ms)
+V_max = 1.0 #maximum flow velocity in microns/ms
+inlet_width = 20.0 #width of the inlet region where particles are initialized in microns
 
 #Place the damaged region near the inlet so platelet activation is testable
 #without requiring an extremely long simulation time.
@@ -53,15 +53,16 @@ damage_region = {
     "contact_y": -R + 2 * plt_radius,
 }
 
-# Initialize the random number generator
+#Initialize the random number generator
 rng = np.random.default_rng(rng_seed)
 
-# Random initial particle positions inside the analytic vessel walls
+#Random initial particle positions inside the analytic vessel walls
 upper_bound_RBC = R - rbc_radius
 lower_bound_RBC = -upper_bound_RBC
 upper_bound_PLT = R - plt_radius
 lower_bound_PLT = -upper_bound_PLT
 
+#Generate RBC particles with random initial positions and zero initial velocity
 rbc_positions = [
     [
         rng.uniform(rbc_radius, inlet_width - rbc_radius),
@@ -70,8 +71,9 @@ rbc_positions = [
     for _ in range(n_rbcs)
 ]
 rbc_particles = make_rbc_population(rbc_radius, rbc_mass, rbc_positions, velocity=[0.0, 0.0])
-
+#empty list to hold PLT particles
 plt_particles = []
+#Generate PLT particles with random initial positions and zero initial velocity
 if n_plts > 0:
     plt_positions = [
         [
@@ -82,47 +84,59 @@ if n_plts > 0:
     ]
     plt_particles = make_plt_population(plt_radius, plt_mass, plt_positions)
 
-# Combine RBC and PLT particles into a single list for the simulation
+#Combine RBC and PLT particles into a single list for the simulation
 particles = rbc_particles + plt_particles
 
-print(f"Using output_dt = {output_dt:.3f}")
+#Function to recycle outflow particles back to the inlet with random y-positions and reset their state
+def recycle_outflow_particles(particles, rng):
+    #for loop to check each particle and recycle those that have flowed past the outlet back to the inlet in random positions!:
+    for particle in particles:
+        if particle["pos"][0] <= L:
+            continue
 
-# Run the simulation and store particle state history
+        radius = particle["radius"]
+        particle["pos"] = np.array(
+            [
+                rng.uniform(radius, inlet_width - radius),
+                rng.uniform(-(R - radius), R - radius),
+            ],
+            dtype=float,
+        )
+        particle["vel"] = np.zeros(2)
+        particle["activated"] = False
+        particle["activation_time"] = 0.0
+        particle["adhered"] = False
+
+#print the parameters to the console for reference
+print(f"\nSimulation parameters:")
+print(f"Number of RBCs: {n_rbcs}")
+print(f"Number of PLTs: {n_plts}")
+print(f"Using output_dt = {output_dt:.3f}\n")
+
+#Run the simulation and store particle state history
 position_history = [[] for _ in particles]
 activation_history = [[] for _ in particles]
 t = 0.0
+#Main simulation loop with adaptive time stepping based on stability criteria and platelet activation dynamics:
 for step in range(n_steps):
     frame_end = (step + 1) * output_dt
     last_dt = dt_max
 
     while t < frame_end:
-        dt = compute_stable_dt(
-            particles,
-            R,
-            V_max,
-            k_contact,
-            damage_region,
-            k_adhesion,
-            dt_max,
-        )
+        #calling function to compute a stable time step inside the inner loop as recommended:
+        dt = compute_stable_dt(particles,R,V_max,k_contact,damage_region,k_adhesion,dt_max)
         dt = min(dt, frame_end - t)
         last_dt = dt
 
-        update_particles_with_activation_and_adhesion(
-            particles,
-            dt,
-            mu,
-            R,
-            V_max,
-            k_contact,
-            damage_region,
-            threshold,
-            activation_time_required,
-            adhesion_cutoff,
-            k_adhesion,
-        )
-        t += dt
+        #calling function to update particle positions and velocities based on forces: flow, contact, activation, and adhesion:
+        update_particles_with_activation_and_adhesion(particles,dt,mu,R,V_max,k_contact,damage_region,threshold,activation_time_required,adhesion_cutoff,k_adhesion)
 
+        t += dt #increment the simulation time by the chosen time step
+
+    #function to recycle outflow particles back to the inlet with random y-positions and reset their state:
+    recycle_outflow_particles(particles, rng)
+
+    #for loop to record the position and activation state of each particle at the end of the current frame for plotting and animation:  
     for index, particle in enumerate(particles):
         position_history[index].append(particle["pos"].copy())
         activation_history[index].append(particle["activated"])
@@ -136,56 +150,12 @@ for step in range(n_steps):
             f"last solver dt = {last_dt:.3e}"
         )
 
-# Plot particle trajectories
-plt.figure(figsize=(8, 4))
-plotted_labels = set()
-for particle, history in zip(particles, position_history):
-    history = np.array(history)
-    if particle["kind"] == "RBC":
-        color = "red"
-        marker_size = 8
-        label = "RBCs"
-    elif particle["activated"]:
-        color = "lime"
-        marker_size = 5
-        label = "Activated PLTs"
-    else:
-        color = "gold"
-        marker_size = 5
-        label = "Inactive PLTs"
-
-    if label in plotted_labels:
-        label = None
-    else:
-        plotted_labels.add(label)
-
-    plt.plot(history[:, 0], history[:, 1], label=label, color=color, marker="o", markersize=marker_size)
-
-wall_x = np.linspace(0, L, 1000)
-plt.plot(wall_x, -R * np.ones_like(wall_x), color="royalblue", linewidth=4, label="Lower Wall")
-plt.plot(wall_x, R * np.ones_like(wall_x), color="royalblue", linewidth=4, label="Upper Wall")
-plt.plot(
-    [damage_region["x_min"], damage_region["x_max"]],
-    [damage_region["y"], damage_region["y"]],
-    color="orange",
-    linewidth=6,
-    label="Damage Region",
-)
-plt.xlabel("D (microns)")
-plt.ylabel("L (microns)")
-plt.title("Blood Cell Trajectories")
-plt.xlim(0, L)
-plt.ylim(-R, R)
-plt.legend()
-os.makedirs("figs", exist_ok=True)
-plt.savefig(os.path.join("figs", "RBC_Trajectories.png"), dpi=300, bbox_inches="tight")
-plt.close()
-
-# Add the animation using matplotlib's FuncAnimation
+#Add the animation using matplotlib's FuncAnimation
 fig, ax = plt.subplots(figsize=(8, 4))
 rbc_scatter = ax.scatter([], [], label="RBCs", color="red", s=50, marker="o")
 inactive_plt_scatter = ax.scatter([], [], label="Inactive PLTs", color="gold", s=30, marker="o")
 activated_plt_scatter = ax.scatter([], [], label="Activated PLTs", color="blue", s=30, marker="o")
+wall_x = np.linspace(0, L, 1000)
 ax.plot(wall_x, -R * np.ones_like(wall_x), color="firebrick", linewidth=12, label="Lower Wall")
 ax.plot(wall_x, R * np.ones_like(wall_x), color="firebrick", linewidth=12, label="Upper Wall")
 ax.plot(
@@ -208,6 +178,7 @@ def update(frame):
     inactive_plt_positions = []
     activated_plt_positions = []
 
+    #for loop to separate the positions of RBCs, activated PLTs, and inactive PLTs for plotting in the animation:
     for index, (particle, history) in enumerate(zip(particles, position_history)):
         if particle["kind"] == "RBC":
             pos = history[frame]
@@ -230,6 +201,7 @@ def update(frame):
 
     return rbc_scatter, inactive_plt_scatter, activated_plt_scatter
 
+#Create the animation and save it as a GIF using FuncAnimation:
 animation = FuncAnimation(fig, update, frames=range(0, n_steps, 5), interval=50, blit=False)
 save_path = os.path.join("figs", "Blood_Cell_Animation.gif")
 animation.save(save_path, writer="pillow", fps=20, dpi=300)
