@@ -1,8 +1,9 @@
 
 # files
-Garcia_Callejas_N_P3.pdf
+*.pdf
+*.docx
+*.dcox
+
+# folders
 P3R/
 .vscode/
-# folders
-*/.pdf
-*/.docx
