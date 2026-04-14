@@ -2,4 +2,5 @@
 ## Some of the projects include: 
 1) Skin Cancer Growth Model
 2) Coronary Artery Bypass
-3) Blood Clotting Vessel Model (In Progress...)
+3) Blood Clotting Vessel Model 
+4) In progress...
