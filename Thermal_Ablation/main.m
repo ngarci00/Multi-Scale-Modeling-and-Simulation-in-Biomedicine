@@ -36,7 +36,7 @@ Tdead = 50; %Cell death threshold temperature (C) if a cells exceeds this temp, 
 %Tissue properties for the bioheat equation:
 rho = 1.06; %Tissue density: g/cm^3
 cp = 0.9; %Tissue specific heat: cal/(g*C)
-k = 0.0012; %Thermal conductivity: cal/(cm*s*C) ~ 0.5 W/(m*K) in SI units
+k = 0.012; %Thermal conductivity: cal/(cm*s*C) ~ 0.5 W/(m*K) in SI units
 
 %Metabolic heat is usually small compared with ablation heating.
 metabolicHeat = 0; %cal/(cm^3*s)
@@ -44,7 +44,7 @@ metabolicHeat = 0; %cal/(cm^3*s)
 %Blood properties for the perfusion term in the bioheat equation:
 rhoBlood = 1.06; %Blood density: g/cm^3
 cpBlood = 0.9; %Blood specific heat: cal/(g*C) 
-omegaBlood = 0.0017; %Blood perfusion rate: 1/s 
+omegaBlood = 0.017; %Blood perfusion rate: 1/s 
 bloodPerfusion = rhoBlood * cpBlood * omegaBlood; %cal/(cm^3*s) 
 %Blood perfusion or cooling term in the bioheat equation. Is calculated as the product of blood density, specific heat, and perfusion rate,
 % which represents the rate of heat removal due to blood flow per unit volume of tissue.
@@ -72,6 +72,7 @@ for e = 1:nelem
 end
 %Printing area stats:
 fprintf('Area check: min %.3e, max %.3e, total %.3e cm^2. \n', min(area), max(area), sum(area));
+
 %% Boundary labels
 
 %esuelbc (aka element-to-element connectivity and boundary condition): 
@@ -118,7 +119,7 @@ fprintf('Wrote boundary-label VTK: %s\n', vtkName);
 %Parameters for the thermal solver:
 T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
 dt = 1e-1; %time step (s)
-nSteps = 5000; %number of time steps to simulate
+nSteps = 10000; %number of time steps to simulate
 
 %% Animation setup for visualizing temperature evolution in MATLAB
 plotEvery = 50; %plot every N time steps
@@ -192,6 +193,9 @@ end
 %Print result updates to the console: 
 fprintf('Completed %d time steps of the thermal ablation simulation.\n', nSteps);
 fprintf('Final temperature range: min %.2f C, max %.2f C.\n', min(T), max(T));
+fprintf('Maximum temperature rise above body: %.6f C\n', max(T - Tbody));
+fprintf('Cells above body + 0.01 C: %d\n', nnz(T > Tbody + 0.01));
+fprintf('Cells above 40 C: %d\n', nnz(T > 40));
 %Printing the number of cells that are above the cell death threshold:
 deadArea = sum(area(T >= Tdead)); %total area of cells above the cell death threshold
 fprintf('Total area above cell death threshold (%.2f C): %.3e cm^2\n', Tdead, deadArea);
@@ -206,7 +210,11 @@ patch('Faces', ele, ...
 axis equal tight;
 colormap(jet);
 colorbar;
-caxis([Tbody Ttip]);
+colorMax = max(T);
+if colorMax <= Tbody
+    colorMax = Tbody + 1;
+end
+caxis([Tbody colorMax]);
 title(sprintf('%s %s final temperature, t = %.2f minutes', caseName, meshKind, (nSteps * dt)/60));
 xlabel('x (cm)');
 ylabel('y (cm)');
@@ -218,6 +226,33 @@ scatter(centroid(isTip, 1), centroid(isTip, 2), 10, [0 0 0], 'filled');
 figName = fullfile(outDir, sprintf('%s_%s_final_temperature.png', caseName, meshKind));
 saveas(gcf, figName);
 fprintf('Saved final temperature figure: %s\n', figName);
+
+%% Save final temperature-rise image
+temperatureRise = T - Tbody;
+figure('Name', sprintf('%s %s final temperature rise', caseName, meshKind));
+patch('Faces', ele, ...
+    'Vertices', xyz(:, 1:2), ...
+    'FaceVertexCData', temperatureRise, ...
+    'FaceColor', 'flat', ...
+    'EdgeColor', 'none');
+axis equal tight;
+colormap(hot);
+colorbar;
+riseMax = max(temperatureRise);
+if riseMax <= 0
+    riseMax = 1;
+end
+caxis([0 riseMax]);
+title(sprintf('%s %s final temperature rise, t = %.2f minutes', caseName, meshKind, (nSteps * dt)/60));
+xlabel('x (cm)');
+ylabel('y (cm)');
+hold on;
+scatter(centroid(isNeedleBody, 1), centroid(isNeedleBody, 2), 6, [0.25 0.25 0.25], 'filled');
+scatter(centroid(isTip, 1), centroid(isTip, 2), 10, [0 0 0], 'filled');
+
+riseFigName = fullfile(outDir, sprintf('%s_%s_final_temperature_rise.png', caseName, meshKind));
+saveas(gcf, riseFigName);
+fprintf('Saved final temperature-rise figure: %s\n', riseFigName);
 
 %% Export final temperature distribution as VTK for visualization in ParaView
 vtkName = fullfile(outDir, sprintf('%s_%s_temperature.vtk', caseName, meshKind));
