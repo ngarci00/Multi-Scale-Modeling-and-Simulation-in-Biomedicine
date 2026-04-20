@@ -94,6 +94,7 @@ fprintf('Boundary elements: tip %d, outer box %d, needle body %d. \n', nnz(isTip
 figure('Name', sprintf('%s %s boundary check', caseName, meshKind));
 triplot(ele, xyz(:, 1), xyz(:, 2), 'Color', [0.72 0.72 0.72]); %plotting the mesh in light gray hence the color [0.72 0.72 0.72]
 axis equal tight;
+hold on;
 scatter(centroid(isOuterBox, 1), centroid(isOuterBox, 2), 8, [0.1 0.35 0.8], 'filled'); %outer box in blue
 scatter(centroid(isNeedleBody, 1), centroid(isNeedleBody, 2), 8, [0.3 0.3 0.3], 'filled'); %needle body in gray
 scatter(centroid(isTip, 1), centroid(isTip, 2), 12, [0.85 0.1 0.1], 'filled'); %needle tip in red
@@ -101,29 +102,32 @@ legend({'mesh', 'outer box', 'needle body', 'needle tip'}, 'Location', 'bestouts
 title(sprintf('%s %s mesh boundary labels', caseName, meshKind));
 xlabel('x (cm)');
 ylabel('y (cm)');
-hold off;
 %% Export results as VTK using dumpVTK for visualization in ParaView
 outDir = fullfile(projectRoot, 'results');
 
+if exist(outDir, 'dir') ~= 7
+    mkdir(outDir);
+end
+
+%Boundary Condition check for VTK export:
 vtkName = fullfile(outDir, sprintf('%s_%s_boundary_check.vtk', caseName, meshKind));
 dumpVTK(vtkName, npoin, nelem, xyz, ele, boundaryCode, 'boundary_code');
 fprintf('Wrote boundary-label VTK: %s\n', vtkName);
-
-%Save the figure (final) as a PNG file:
-figName = fullfile(outDir, sprintf('%s_%s_boundary_check.png', caseName, meshKind));
-saveas(gcf, figName);
-fprintf('Saved boundary check figure: %s\n', figName);
 %% Thermal Solver Implementation
 
 %Parameters for the thermal solver:
 T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
-dt = 1e-2; %time step (s)
+dt = 1e-1; %time step (s)
 nSteps = 5000; %number of time steps to simulate
 
 %% Animation setup for visualizing temperature evolution in MATLAB
 plotEvery = 50; %plot every N time steps
 frameDir = fullfile(outDir, sprintf('%s_%s_temperature_frames', caseName, meshKind));
 FrameId = 0; %initialize frame ID for animation
+
+if exist(frameDir, 'dir') ~= 7
+    mkdir(frameDir);
+end
 
 %Export initial temperature distribution as VTK for visualization in ParaView:
 vtkFrameName = fullfile(frameDir, sprintf('%s_%s_temperature_frame_%04d.vtk', caseName, meshKind, FrameId));
@@ -191,6 +195,29 @@ fprintf('Final temperature range: min %.2f C, max %.2f C.\n', min(T), max(T));
 %Printing the number of cells that are above the cell death threshold:
 deadArea = sum(area(T >= Tdead)); %total area of cells above the cell death threshold
 fprintf('Total area above cell death threshold (%.2f C): %.3e cm^2\n', Tdead, deadArea);
+
+%% Save final temperature image
+figure('Name', sprintf('%s %s final temperature distribution', caseName, meshKind));
+patch('Faces', ele, ...
+    'Vertices', xyz(:, 1:2), ...
+    'FaceVertexCData', T, ...
+    'FaceColor', 'flat', ...
+    'EdgeColor', 'none');
+axis equal tight;
+colormap(jet);
+colorbar;
+caxis([Tbody Ttip]);
+title(sprintf('%s %s final temperature, t = %.2f minutes', caseName, meshKind, (nSteps * dt)/60));
+xlabel('x (cm)');
+ylabel('y (cm)');
+hold on;
+scatter(centroid(isNeedleBody, 1), centroid(isNeedleBody, 2), 6, [0.25 0.25 0.25], 'filled');
+scatter(centroid(isTip, 1), centroid(isTip, 2), 10, [0 0 0], 'filled');
+
+%Save the final temperature figure as a PNG file:
+figName = fullfile(outDir, sprintf('%s_%s_final_temperature.png', caseName, meshKind));
+saveas(gcf, figName);
+fprintf('Saved final temperature figure: %s\n', figName);
 
 %% Export final temperature distribution as VTK for visualization in ParaView
 vtkName = fullfile(outDir, sprintf('%s_%s_temperature.vtk', caseName, meshKind));
