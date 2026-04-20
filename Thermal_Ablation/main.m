@@ -36,15 +36,20 @@ Tdead = 50; %Cell death threshold temperature (C) if a cells exceeds this temp, 
 %Tissue properties for the bioheat equation:
 rho = 1.06; %Tissue density: g/cm^3
 cp = 0.9; %Tissue specific heat: cal/(g*C)
-k = 0.012; %Thermal conductivity: cal/(cm*s*C) ~ 0.5 W/(m*K) in SI units
+k = 0.8; %Thermal conductivity: cal/(cm*s*C) ~ 0.5 W/(m*K) in SI units
 
 %Metabolic heat is usually small compared with ablation heating.
-metabolicHeat = 0; %cal/(cm^3*s)
+metabolicHeat = 0.005; %cal/(cm^3*s)
 
 %Blood properties for the perfusion term in the bioheat equation:
 bloodPerfusion = 0.1; %cal/(cm^3*s) 
 %Blood perfusion or cooling term in the bioheat equation. Is calculated as the product of blood density, specific heat, and perfusion rate,
 % which represents the rate of heat removal due to blood flow per unit volume of tissue.
+
+%Parameters for the thermal solver:
+T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
+dt = 1e-3; %time step (s)
+nSteps = 30000; %number of time steps to simulate
 
 %% Cell geometry for a triangular finite-volume method
 area = zeros(nelem, 1); %area of each triangular cell
@@ -111,12 +116,6 @@ end
 vtkName = fullfile(outDir, sprintf('%s_%s_boundary_check.vtk', caseName, meshKind));
 dumpVTK(vtkName, npoin, nelem, xyz, ele, boundaryCode, 'boundary_code');
 fprintf('Wrote boundary-label VTK: %s\n', vtkName);
-%% Thermal Solver Implementation
-
-%Parameters for the thermal solver:
-T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
-dt = 1e-2; %time step (s)
-nSteps = 20000; %number of time steps to simulate
 
 %% Animation setup for visualizing temperature evolution in MATLAB
 plotEvery = 50; %plot every N time steps
@@ -131,7 +130,8 @@ end
 vtkFrameName = fullfile(frameDir, sprintf('%s_%s_temperature_frame_%04d.vtk', caseName, meshKind, FrameId));
 dumpVTK(vtkFrameName, npoin, nelem, xyz, ele, T, 'temperature');
 fprintf('Wrote initial temperature VTK: %s\n', vtkFrameName);
-%% For loop: loops through 1) time steps, 2) elements, and 3) faces of each element to compute Tnew based on conduction fluxes
+%% Thermal Solver Implementation
+% For loop: loops through 1) time steps, 2) elements, and 3) faces of each element to compute Tnew based on conduction fluxes
 for step = 1:nSteps
 
     T_new = T; %initialize new temperature vector for this time step
