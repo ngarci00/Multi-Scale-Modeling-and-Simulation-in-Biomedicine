@@ -28,16 +28,24 @@ npoin = size(xyz, 1);
 
 %Printing mesh info to the console
 fprintf('Loaded %s %s mesh: %d points, %d triangular elements.\n', caseName, meshKind, npoin, nelem);
-%% Parameters:
+%% Parameters (CGS) units, length = cm, mass = g, time = s, heat = cal, temperature = C.:
 Tbody = 37; %Body temperature (C)
 Ttip = 100; %Needle tip temperature (C)
 Tdead = 50; %Cell death threshold temperature (C)
 
-rho = 1; %Density (g/cm^3) - placeholder value, to be updated with actual tissue properties
-cp = 1; %Specific heat capacity (cal/g/C) - placeholder value, to be updated with actual tissue properties
-k = 1; %Thermal conductivity (cal/cm/s/C) - placeholder value, to be updated with actual tissue properties
-metabolicHeat = 0; %Metabolic heat generation (cal/cm^3/s), off for first conduction test
-bloodPerfusion = 0; %Blood perfusion cooling coefficient (1/s), off for first conduction test
+%Tissue properties for the bioheat equation:
+rho = 1.06; %Tissue density: g/cm^3
+cp = 0.9; %Tissue specific heat: J/(kg C) -> cal/(g C)
+k = 0.0012; %Thermal conductivity: W/(m C) -> cal/(cm s C)
+
+%Metabolic heat is usually small compared with ablation heating.
+metabolicHeat = 0; %cal/(cm^3 s)
+
+%Blood properties for the perfusion term in the bioheat equation:
+rhoBlood = 1.06; %Blood density: g/cm^3
+cpBlood = 0.9; %Blood specific heat: J/(kg C) -> cal/(g C)
+omegaBlood = 0.0017; %Blood perfusion rate: 1/s
+bloodPerfusion = rhoBlood * cpBlood * omegaBlood; %cal/(cm^3 s C)
 
 %% Cell geometry for a triangular finite-volume method
 area = zeros(nelem, 1); %area of each triangular cell
@@ -61,9 +69,10 @@ for e = 1:nelem
     edgeLength(e, 3) = norm(x1 - x2); %edge opposite to x3
 end
 %Printing area stats:
-fprintf('Area check: min %.3e, max %.3e, total %.3e. \n', min(area), max(area), sum(area));
+fprintf('Area check: min %.3e, max %.3e, total %.3e cm^2. \n', min(area), max(area), sum(area));
 %% Boundary labels
-%esuelbc entries:
+
+%esuelbc (aka element-to-element connectivity and boundary condition): 
 %-1 = needle tip, apply constant hot-temperature boundary condition
 %-2 = outer box, apply adiabatic/no-flux boundary condition
 %-3 = needle body, apply adiabatic/no-flux boundary condition
@@ -71,7 +80,7 @@ isTip = any(esuelbc == -1, 2);
 isOuterBox = any(esuelbc == -2, 2);
 isNeedleBody = any(esuelbc == -3, 2);
 
-%creating a boundary code vector for visualization and later use in the solver, where:
+%Creating a boundary code vector for visualization and later use in the solver, where:
 % 0 = interior cell, 1 = outer box, 2 = needle body, 3 = needle tip
 boundaryCode = zeros(nelem, 1); %initializing all cells as interior (0)
 boundaryCode(isOuterBox) = 1; %outer box is the default boundary label for any cell that has an outer box face
@@ -89,8 +98,8 @@ scatter(centroid(isNeedleBody, 1), centroid(isNeedleBody, 2), 8, [0.3 0.3 0.3], 
 scatter(centroid(isTip, 1), centroid(isTip, 2), 12, [0.85 0.1 0.1], 'filled'); %needle tip in red
 legend({'mesh', 'outer box', 'needle body', 'needle tip'}, 'Location', 'bestoutside');
 title(sprintf('%s %s mesh boundary labels', caseName, meshKind));
-xlabel('x');
-ylabel('y');
+xlabel('x (cm)');
+ylabel('y (cm)');
 %% Export results as VTK using dumpVTK for visualization in ParaView
 outDir = fullfile(projectRoot, 'results');
 if exist(outDir, 'dir') ~= 7
@@ -107,7 +116,19 @@ T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
 dt = 1e-5; %time step (s), small value for first explicit conduction test
 nSteps = 1000; %number of time steps to simulate
 
-%For loop: loops through 1) time steps, 2) elements, and 3) faces of each element to compute Tnew 
+%% Animation setup for visualizing temperature evolution in MATLAB
+plotEvery = 50; %plot every N time steps
+frameDir = fullfile(outDir, sprintf('%s_%s_temperature_frames', caseName, meshKind));
+
+if exist(frameDir, 'dir') ~= 7
+    mkdir(frameDir);
+end
+
+FrameId = 0; %initialize frame ID for animation
+vtkFrameName = fullfile(frameDir, sprintf('%s_%s_temperature_frame_%04d.vtk', caseName, meshKind, FrameId));
+dumpVTK(vtkFrameName, npoin, nelem, xyz, ele, T, 'temperature');
+fprintf('Wrote initial temperature VTK: %s\n', vtkFrameName);
+%% For loop: loops through 1) time steps, 2) elements, and 3) faces of each element to compute Tnew 
 %based on conduction fluxes
 for step = 1:nSteps
 
@@ -142,7 +163,7 @@ for step = 1:nSteps
                 faceMid = 0.5 * (xyz(faceNodes(1), :) + xyz(faceNodes(2), :));
                 d = norm(faceMid - centroid(e, :)); %distance from cell center to boundary face
                 flux = k * edgeLength(e, i) * (Ttip - T(e)) / d; %Fourier's law for conduction with hot tip temperature
-                fluxSum = fluxSum + flux;
+                fluxSum = fluxSum + flux; %accumulate flux for cell
 
             elseif neighbor == -2 || neighbor == -3 %no-flux boundary condition
             end
@@ -154,6 +175,13 @@ for step = 1:nSteps
         T_new(e) = T(e) + dt * (fluxSum + sourceTerm - sinkTerm) / (rho * cp * area(e)); %updating temp using Euler's method
     end
     T = T_new; %update temperature vector for the next time step
+
+    if mod(step, plotEvery) == 0
+        FrameId = FrameId + 1;
+        vtkFrameName = fullfile(frameDir, sprintf('%s_%s_temperature_frame_%04d.vtk', caseName, meshKind, FrameId));
+        dumpVTK(vtkFrameName, npoin, nelem, xyz, ele, T, 'temperature');
+        fprintf('Wrote temperature VTK for step %d: %s\n', step, vtkFrameName);
+    end 
 end
 
 %Print result updates to the console: 
