@@ -9,7 +9,7 @@ addpath(fullfile(projectRoot, 'assets'));
 %% Mesh selection
 %Selecting the mesh to load, making it easy for comparison
 needleId = 1;        % options: 1, 2 (missing unif), 3, 4 
-meshKind = 'sour';   % options: 'unif' (uniform) or 'sour' (refined near the needle tip)
+meshKind = 'unif';   % options: 'unif' (uniform) or 'sour' (refined near the needle tip)
 
 %Loading the mesh file and boundary conditions for the selected case
 caseName = sprintf('needle%d', needleId);
@@ -106,7 +106,7 @@ title(sprintf('%s %s mesh boundary labels', caseName, meshKind));
 xlabel('x (cm)');
 ylabel('y (cm)');
 %% Export results as VTK using dumpVTK for visualization in ParaView
-outDir = fullfile(projectRoot, 'results');
+outDir = fullfile(projectRoot, 'results', caseName, meshKind);
 
 if exist(outDir, 'dir') ~= 7
     mkdir(outDir);
@@ -119,11 +119,16 @@ fprintf('Wrote boundary-label VTK: %s\n', vtkName);
 
 %% Animation setup for visualizing temperature evolution in MATLAB
 plotEvery = 50; %plot every N time steps
-frameDir = fullfile(outDir, sprintf('%s_%s_temperature_frames', caseName, meshKind));
+frameDir = fullfile(outDir, 'temperature_frames');
 FrameId = 0; %initialize frame ID for animation
 
 if exist(frameDir, 'dir') ~= 7
     mkdir(frameDir);
+else
+    oldFrames = dir(fullfile(frameDir, sprintf('%s_%s_temperature_frame_*.vtk', caseName, meshKind)));
+    for oldFrameIdx = 1:numel(oldFrames)
+        delete(fullfile(frameDir, oldFrames(oldFrameIdx).name));
+    end
 end
 
 %Export initial temperature distribution as VTK for visualization in ParaView:
@@ -210,7 +215,7 @@ if colorMax <= Tbody
     colorMax = Tbody + 1;
 end
 caxis([Tbody colorMax]);
-title(sprintf('%s %s final temperature, t = %.2f minutes', caseName, meshKind, (nSteps * dt)/60));
+title(sprintf('%s %s Final Temperature, t = %.2f seconds', caseName, meshKind, nSteps * dt));
 xlabel('x (cm)');
 ylabel('y (cm)');
 hold on;
