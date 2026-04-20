@@ -226,34 +226,6 @@ scatter(centroid(isTip, 1), centroid(isTip, 2), 10, [0 0 0], 'filled');
 figName = fullfile(outDir, sprintf('%s_%s_final_temperature.png', caseName, meshKind));
 saveas(gcf, figName);
 fprintf('Saved final temperature figure: %s\n', figName);
-
-%% Save final temperature-rise image
-temperatureRise = T - Tbody;
-figure('Name', sprintf('%s %s final temperature rise', caseName, meshKind));
-patch('Faces', ele, ...
-    'Vertices', xyz(:, 1:2), ...
-    'FaceVertexCData', temperatureRise, ...
-    'FaceColor', 'flat', ...
-    'EdgeColor', 'none');
-axis equal tight;
-colormap(hot);
-colorbar;
-riseMax = max(temperatureRise);
-if riseMax <= 0
-    riseMax = 1;
-end
-caxis([0 riseMax]);
-title(sprintf('%s %s final temperature rise, t = %.2f minutes', caseName, meshKind, (nSteps * dt)/60));
-xlabel('x (cm)');
-ylabel('y (cm)');
-hold on;
-scatter(centroid(isNeedleBody, 1), centroid(isNeedleBody, 2), 6, [0.25 0.25 0.25], 'filled');
-scatter(centroid(isTip, 1), centroid(isTip, 2), 10, [0 0 0], 'filled');
-
-riseFigName = fullfile(outDir, sprintf('%s_%s_final_temperature_rise.png', caseName, meshKind));
-saveas(gcf, riseFigName);
-fprintf('Saved final temperature-rise figure: %s\n', riseFigName);
-
 %% Export final temperature distribution as VTK for visualization in ParaView
 vtkName = fullfile(outDir, sprintf('%s_%s_temperature.vtk', caseName, meshKind));
 dumpVTK(vtkName, npoin, nelem, xyz, ele, T, 'temperature');
