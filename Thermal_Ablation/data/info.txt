@@ -17,7 +17,7 @@ for each mesh: 3 files
 	neighbor 2 is opposite to node 2
 	neighbor 3 is opposite to node 3
 	for boundary elements:
-	  the entry for the non-existing neighbor has a negaive value:
+	  the entry for the non-existing neighbor has a negative value:
 	  -1: needle tip  --> apply hot temperature boundary condition
 	  -2: outer  box  --> apply adiabatic boundary condition
 	  -3: needle body --> apply adiabatic boundary condition
