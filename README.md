@@ -3,4 +3,4 @@
 1) Skin Cancer Growth Model
 2) Coronary Artery Bypass
 3) Blood Clotting Vessel Model 
-4) In progress...
+4) Thermal Ablation Model based on Bioheat Equation

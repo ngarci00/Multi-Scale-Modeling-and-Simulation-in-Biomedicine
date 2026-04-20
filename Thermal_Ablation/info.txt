@@ -1,0 +1,24 @@
+data provided: 4 different needle geometries (designs)
+    + needle1
+    + needle2
+    + needle3
+    + needle4
+
+for each needle: 2 different meshes 
+    + unif (uniform mesh) 
+    + sour (mesh refined close to the needle)
+
+for each mesh: 3 files
+    + elems: element connectivity (a,b,c: vertices of each triangle)
+    + point: point coordinates (x,y,z of each point)
+    + esuelbc: neighbors of each element + boundary conditions
+        this array has the 3 neighbors of each element
+	neighbor 1 is opposite to node 1
+	neighbor 2 is opposite to node 2
+	neighbor 3 is opposite to node 3
+	for boundary elements:
+	  the entry for the non-existing neighbor has a negaive value:
+	  -1: needle tip  --> apply hot temperature boundary condition
+	  -2: outer  box  --> apply adiabatic boundary condition
+	  -3: needle body --> apply adiabatic boundary condition
+
