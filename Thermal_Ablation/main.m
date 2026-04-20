@@ -92,7 +92,6 @@ fprintf('Boundary elements: tip %d, outer box %d, needle body %d. \n', nnz(isTip
 figure('Name', sprintf('%s %s boundary check', caseName, meshKind));
 triplot(ele, xyz(:, 1), xyz(:, 2), 'Color', [0.72 0.72 0.72]); %plotting the mesh in light gray hence the color [0.72 0.72 0.72]
 axis equal tight;
-hold on;
 scatter(centroid(isOuterBox, 1), centroid(isOuterBox, 2), 8, [0.1 0.35 0.8], 'filled'); %outer box in blue
 scatter(centroid(isNeedleBody, 1), centroid(isNeedleBody, 2), 8, [0.3 0.3 0.3], 'filled'); %needle body in gray
 scatter(centroid(isTip, 1), centroid(isTip, 2), 12, [0.85 0.1 0.1], 'filled'); %needle tip in red
@@ -102,6 +101,7 @@ xlabel('x (cm)');
 ylabel('y (cm)');
 %% Export results as VTK using dumpVTK for visualization in ParaView
 outDir = fullfile(projectRoot, 'results');
+
 if exist(outDir, 'dir') ~= 7
     mkdir(outDir);
 end
@@ -109,27 +109,28 @@ end
 vtkName = fullfile(outDir, sprintf('%s_%s_boundary_check.vtk', caseName, meshKind));
 dumpVTK(vtkName, npoin, nelem, xyz, ele, boundaryCode, 'boundary_code');
 fprintf('Wrote boundary-label VTK: %s\n', vtkName);
+
+%Save the figure (final) as a PNG file:
+figName = fullfile(outDir, sprintf('%s_%s_boundary_check.png', caseName, meshKind));
+saveas(gcf, figName);
+fprintf('Saved boundary check figure: %s\n', figName);
 %% Thermal Solver Implementation
 
 %Parameters for the thermal solver:
 T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
-dt = 1e-5; %time step (s), small value for first explicit conduction test
-nSteps = 1000; %number of time steps to simulate
+dt = 1e-2; %time step (s)
+nSteps = 5000; %number of time steps to simulate
 
 %% Animation setup for visualizing temperature evolution in MATLAB
 plotEvery = 50; %plot every N time steps
 frameDir = fullfile(outDir, sprintf('%s_%s_temperature_frames', caseName, meshKind));
-
-if exist(frameDir, 'dir') ~= 7
-    mkdir(frameDir);
-end
-
 FrameId = 0; %initialize frame ID for animation
+
+%Export initial temperature distribution as VTK for visualization in ParaView:
 vtkFrameName = fullfile(frameDir, sprintf('%s_%s_temperature_frame_%04d.vtk', caseName, meshKind, FrameId));
 dumpVTK(vtkFrameName, npoin, nelem, xyz, ele, T, 'temperature');
 fprintf('Wrote initial temperature VTK: %s\n', vtkFrameName);
-%% For loop: loops through 1) time steps, 2) elements, and 3) faces of each element to compute Tnew 
-%based on conduction fluxes
+%% For loop: loops through 1) time steps, 2) elements, and 3) faces of each element to compute Tnew based on conduction fluxes
 for step = 1:nSteps
 
     T_new = T; %initialize new temperature vector for this time step
