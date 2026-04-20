@@ -8,7 +8,7 @@ addpath(fullfile(projectRoot, 'assets'));
 
 %% Mesh selection
 %Selecting the mesh to load, making it easy for comparison
-needleId = 1;        % options: 1, 2, 3, 4
+needleId = 1;        % options: 1, 2 (missing unif), 3, 4 
 meshKind = 'sour';   % options: 'unif' (uniform) or 'sour' (refined near the needle tip)
 
 %Loading the mesh file and boundary conditions for the selected case
@@ -33,8 +33,11 @@ Tbody = 37; %Body temperature (C)
 Ttip = 100; %Needle tip temperature (C)
 Tdead = 50; %Cell death threshold temperature (C)
 
-% TODO: choose/confirm material parameters for the bioheat equation:
-% rho, cp, k, metabolic heat source, blood-perfusion sink coefficient.
+rho = 1; %Density (g/cm^3) - placeholder value, to be updated with actual tissue properties
+cp = 1; %Specific heat capacity (cal/g/C) - placeholder value, to be updated with actual tissue properties
+k = 1; %Thermal conductivity (cal/cm/s/C) - placeholder value, to be updated with actual tissue properties
+metabolicHeat = 0; %Metabolic heat generation (cal/cm^3/s), off for first conduction test
+bloodPerfusion = 0; %Blood perfusion cooling coefficient (1/s), off for first conduction test
 
 %% Cell geometry for a triangular finite-volume method
 area = zeros(nelem, 1); %area of each triangular cell
@@ -57,7 +60,7 @@ for e = 1:nelem
     edgeLength(e, 2) = norm(x3 - x1); %edge opposite to x2
     edgeLength(e, 3) = norm(x1 - x2); %edge opposite to x3
 end
-
+%Printing area stats:
 fprintf('Area check: min %.3e, max %.3e, total %.3e. \n', min(area), max(area), sum(area));
 %% Boundary labels
 %esuelbc entries:
@@ -95,7 +98,7 @@ if exist(outDir, 'dir') ~= 7
 end
 
 vtkName = fullfile(outDir, sprintf('%s_%s_boundary_check.vtk', caseName, meshKind));
-dumpVTK(vtkName, npoin, nelem, xyz, ele, boundaryCode);
+dumpVTK(vtkName, npoin, nelem, xyz, ele, boundaryCode, 'boundary_code');
 fprintf('Wrote boundary-label VTK: %s\n', vtkName);
 %% Next steps:
 % Implement one explicit Forward Euler step for T_cell:
@@ -105,3 +108,68 @@ fprintf('Wrote boundary-label VTK: %s\n', vtkName);
 % 3. Add conduction fluxes through each face using edgeLength(e,i).
 % 4. Add metabolic source and blood-perfusion cooling terms.
 % 5. Update T with dt and repeat in a time loop.
+
+T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
+dt = 1e-5; %time step (s), small value for first explicit conduction test
+nSteps = 1000; %number of time steps to simulate
+
+%For loop: loops through 1) time steps, 2) elements, and 3) faces of each element to compute Tnew 
+%based on conduction fluxes
+for step = 1:nSteps
+
+    T_new = T; %initialize new temperature vector for this time step
+
+    for e = 1:nelem
+        fluxSum = 0; %net heat flux into element e from all three faces
+
+        for i = 1:3 %loop over the three faces of the triangle
+            neighbor = esuelbc(e, i); %neighboring element index or boundary code
+
+            if neighbor > 0 %interior neighbor
+
+                %compute conduction flux between cell e and its neighbor 
+                d = norm(centroid(neighbor, :) - centroid(e, :)); %distance between centroids
+                flux = k * edgeLength(e, i) * (T(neighbor) - T(e)) / d; %Fourier's law for conduction
+                fluxSum = fluxSum + flux; %accumulate flux for cell
+
+            elseif neighbor == -1 %hot tip boundary condition
+                %compute conduction flux between cell e and the hot tip (Ttip)
+                nodes = ele(e, :);
+
+                if i == 1
+                    faceNodes = nodes([2 3]); %face opposite local node 1
+                elseif i == 2
+                    faceNodes = nodes([3 1]); %face opposite local node 2
+                else
+                    faceNodes = nodes([1 2]); %face opposite local node 3
+                end
+                
+                %Calculate the midpoint of the face to estimate the distance to the hot tip boundary condition:
+                faceMid = 0.5 * (xyz(faceNodes(1), :) + xyz(faceNodes(2), :));
+                d = norm(faceMid - centroid(e, :)); %distance from cell center to boundary face
+                flux = k * edgeLength(e, i) * (Ttip - T(e)) / d; %Fourier's law for conduction with hot tip temperature
+                fluxSum = fluxSum + flux;
+
+            elseif neighbor == -2 || neighbor == -3 %no-flux boundary condition
+            end
+        end
+
+        %Bioheat source and sink terms:
+        sourceTerm = metabolicHeat * area(e); %metabolic heat generation term, scaled by cell area
+        sinkTerm = bloodPerfusion * area(e) * (T(e) - Tbody); %blood perfusion cooling term, scaled by cell area and temperature difference from body temp
+        T_new(e) = T(e) + dt * (fluxSum + sourceTerm - sinkTerm) / (rho * cp * area(e)); %updating temp using Euler's method
+    end
+    T = T_new; %update temperature vector for the next time step
+end
+
+%Print result updates to the console: 
+fprintf('Completed %d time steps of the thermal ablation simulation.\n', nSteps);
+fprintf('Final temperature range: min %.2f C, max %.2f C.\n', min(T), max(T));
+%Printing the number of cells that are above the cell death threshold:
+deadArea = sum(area(T >= Tdead)); %total area of cells above the cell death threshold
+fprintf('Total area above cell death threshold (%.2f C): %.3e cm^2\n', Tdead, deadArea);
+
+%% Export final temperature distribution as VTK for visualization in ParaView
+vtkName = fullfile(outDir, sprintf('%s_%s_temperature.vtk', caseName, meshKind));
+dumpVTK(vtkName, npoin, nelem, xyz, ele, T, 'temperature');
+fprintf('Wrote final temperature VTK: %s\n', vtkName);
