@@ -100,15 +100,9 @@ end
 vtkName = fullfile(outDir, sprintf('%s_%s_boundary_check.vtk', caseName, meshKind));
 dumpVTK(vtkName, npoin, nelem, xyz, ele, boundaryCode, 'boundary_code');
 fprintf('Wrote boundary-label VTK: %s\n', vtkName);
-%% Next steps:
-% Implement one explicit Forward Euler step for T_cell:
-% 1. Start with T = Tbody * ones(nelem,1).
-% 2. For each cell face, use esuelbc(e,i) to decide whether the face is an
-%    interior neighbor, the hot tip, or a no-flux boundary.
-% 3. Add conduction fluxes through each face using edgeLength(e,i).
-% 4. Add metabolic source and blood-perfusion cooling terms.
-% 5. Update T with dt and repeat in a time loop.
+%% Thermal Solver Implementation
 
+%Parameters for the thermal solver:
 T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
 dt = 1e-5; %time step (s), small value for first explicit conduction test
 nSteps = 1000; %number of time steps to simulate
