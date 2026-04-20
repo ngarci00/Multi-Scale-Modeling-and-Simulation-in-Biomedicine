@@ -36,7 +36,7 @@ Tdead = 50; %Cell death threshold temperature (C) if a cells exceeds this temp, 
 %Tissue properties for the bioheat equation:
 rho = 1.06; %Tissue density: g/cm^3
 cp = 0.9; %Tissue specific heat: cal/(g*C)
-k = 0.8; %Thermal conductivity: cal/(cm*s*C) ~ 0.5 W/(m*K) in SI units
+k = 1.0; %Thermal conductivity: cal/(cm*s*C) ~ 0.5 W/(m*K) in SI units
 
 %Metabolic heat is usually small compared with ablation heating.
 metabolicHeat = 0.005; %cal/(cm^3*s)
