@@ -42,10 +42,7 @@ k = 0.012; %Thermal conductivity: cal/(cm*s*C) ~ 0.5 W/(m*K) in SI units
 metabolicHeat = 0; %cal/(cm^3*s)
 
 %Blood properties for the perfusion term in the bioheat equation:
-rhoBlood = 1.06; %Blood density: g/cm^3
-cpBlood = 0.9; %Blood specific heat: cal/(g*C) 
-omegaBlood = 0.017; %Blood perfusion rate: 1/s 
-bloodPerfusion = rhoBlood * cpBlood * omegaBlood; %cal/(cm^3*s) 
+bloodPerfusion = 0.1; %cal/(cm^3*s) 
 %Blood perfusion or cooling term in the bioheat equation. Is calculated as the product of blood density, specific heat, and perfusion rate,
 % which represents the rate of heat removal due to blood flow per unit volume of tissue.
 
@@ -118,8 +115,8 @@ fprintf('Wrote boundary-label VTK: %s\n', vtkName);
 
 %Parameters for the thermal solver:
 T = Tbody * ones(nelem, 1); %initial temperature vector for all cells
-dt = 1e-1; %time step (s)
-nSteps = 10000; %number of time steps to simulate
+dt = 1e-2; %time step (s)
+nSteps = 20000; %number of time steps to simulate
 
 %% Animation setup for visualizing temperature evolution in MATLAB
 plotEvery = 50; %plot every N time steps
@@ -194,8 +191,6 @@ end
 fprintf('Completed %d time steps of the thermal ablation simulation.\n', nSteps);
 fprintf('Final temperature range: min %.2f C, max %.2f C.\n', min(T), max(T));
 fprintf('Maximum temperature rise above body: %.6f C\n', max(T - Tbody));
-fprintf('Cells above body + 0.01 C: %d\n', nnz(T > Tbody + 0.01));
-fprintf('Cells above 40 C: %d\n', nnz(T > 40));
 %Printing the number of cells that are above the cell death threshold:
 deadArea = sum(area(T >= Tdead)); %total area of cells above the cell death threshold
 fprintf('Total area above cell death threshold (%.2f C): %.3e cm^2\n', Tdead, deadArea);
@@ -225,7 +220,7 @@ scatter(centroid(isTip, 1), centroid(isTip, 2), 10, [0 0 0], 'filled');
 %Save the final temperature figure as a PNG file:
 figName = fullfile(outDir, sprintf('%s_%s_final_temperature.png', caseName, meshKind));
 saveas(gcf, figName);
-fprintf('Saved final temperature figure: %s\n', figName);
+fprintf('Saved final temperature figure: %s', figName);
 %% Export final temperature distribution as VTK for visualization in ParaView
 vtkName = fullfile(outDir, sprintf('%s_%s_temperature.vtk', caseName, meshKind));
 dumpVTK(vtkName, npoin, nelem, xyz, ele, T, 'temperature');
