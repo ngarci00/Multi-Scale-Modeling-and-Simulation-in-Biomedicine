@@ -28,24 +28,26 @@ npoin = size(xyz, 1);
 
 %Printing mesh info to the console
 fprintf('Loaded %s %s mesh: %d points, %d triangular elements.\n', caseName, meshKind, npoin, nelem);
-%% Parameters (CGS) units, length = cm, mass = g, time = s, heat = cal, temperature = C.:
+%% Parameters (CGS) units, length = cm, mass = g, time = s, heat = cal , temperature = C (we assume the mesh is in cm units):
 Tbody = 37; %Body temperature (C)
 Ttip = 100; %Needle tip temperature (C)
-Tdead = 50; %Cell death threshold temperature (C)
+Tdead = 50; %Cell death threshold temperature (C) if a cells exceeds this temp, is considered ablated/dead
 
 %Tissue properties for the bioheat equation:
 rho = 1.06; %Tissue density: g/cm^3
-cp = 0.9; %Tissue specific heat: J/(kg C) -> cal/(g C)
-k = 0.0012; %Thermal conductivity: W/(m C) -> cal/(cm s C)
+cp = 0.9; %Tissue specific heat: cal/(g*C)
+k = 0.0012; %Thermal conductivity: cal/(cm*s*C) ~ 0.5 W/(m*K) in SI units
 
 %Metabolic heat is usually small compared with ablation heating.
-metabolicHeat = 0; %cal/(cm^3 s)
+metabolicHeat = 0; %cal/(cm^3*s)
 
 %Blood properties for the perfusion term in the bioheat equation:
 rhoBlood = 1.06; %Blood density: g/cm^3
-cpBlood = 0.9; %Blood specific heat: J/(kg C) -> cal/(g C)
-omegaBlood = 0.0017; %Blood perfusion rate: 1/s
-bloodPerfusion = rhoBlood * cpBlood * omegaBlood; %cal/(cm^3 s C)
+cpBlood = 0.9; %Blood specific heat: cal/(g*C) 
+omegaBlood = 0.0017; %Blood perfusion rate: 1/s 
+bloodPerfusion = rhoBlood * cpBlood * omegaBlood; %cal/(cm^3*s) 
+%Blood perfusion or cooling term in the bioheat equation. Is calculated as the product of blood density, specific heat, and perfusion rate,
+% which represents the rate of heat removal due to blood flow per unit volume of tissue.
 
 %% Cell geometry for a triangular finite-volume method
 area = zeros(nelem, 1); %area of each triangular cell
@@ -99,12 +101,9 @@ legend({'mesh', 'outer box', 'needle body', 'needle tip'}, 'Location', 'bestouts
 title(sprintf('%s %s mesh boundary labels', caseName, meshKind));
 xlabel('x (cm)');
 ylabel('y (cm)');
+hold off;
 %% Export results as VTK using dumpVTK for visualization in ParaView
 outDir = fullfile(projectRoot, 'results');
-
-if exist(outDir, 'dir') ~= 7
-    mkdir(outDir);
-end
 
 vtkName = fullfile(outDir, sprintf('%s_%s_boundary_check.vtk', caseName, meshKind));
 dumpVTK(vtkName, npoin, nelem, xyz, ele, boundaryCode, 'boundary_code');
@@ -177,6 +176,7 @@ for step = 1:nSteps
     end
     T = T_new; %update temperature vector for the next time step
 
+    %Exporting temp distribution as a VTK file every step for Paraview:
     if mod(step, plotEvery) == 0
         FrameId = FrameId + 1;
         vtkFrameName = fullfile(frameDir, sprintf('%s_%s_temperature_frame_%04d.vtk', caseName, meshKind, FrameId));
@@ -195,4 +195,4 @@ fprintf('Total area above cell death threshold (%.2f C): %.3e cm^2\n', Tdead, de
 %% Export final temperature distribution as VTK for visualization in ParaView
 vtkName = fullfile(outDir, sprintf('%s_%s_temperature.vtk', caseName, meshKind));
 dumpVTK(vtkName, npoin, nelem, xyz, ele, T, 'temperature');
-fprintf('Wrote final temperature VTK: %s\n', vtkName);
+fprintf('\nWrote final temperature VTK: %s\n', vtkName);
